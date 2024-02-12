@@ -14,11 +14,11 @@ dependencies = [
 description = "Data handling for Aerosol Instruments and Gas analyzers"
 dynamic = ["version"]
 keywords = [
-    "Aerosol"
-    "Particle"
-    "Instrument"
-    "Gas Analyzer"
-    "Dust"
+    "Aerosol",
+    "Particle",
+    "Instrument",
+    "Gas Analyzer",
+    "Dust",
     "data analysis",
     "numpy",
     "python",
