@@ -4,12 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "NFA_Aerosol"
-version = "1.0.2"
-authors = [{name = "NRCWE community}]
+version = "1.0.4"
+authors = [
+    {name = "NRCWE community"},
+    ]
 description = "Data handling for Aerosol Instruments at NFA"
 readme = "README.md"
 requires-python = ">=3.8"
-
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
