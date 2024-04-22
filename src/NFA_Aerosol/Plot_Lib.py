@@ -988,7 +988,7 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
 ###############################################################################
 ###############################################################################
   
-def Plot_PSD_1(*data_in, labels=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
+def Plot_PSD_different_instruments(*data_in, labels=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
     """
     Similar to Plot_PSD only this function can plot the PSDs for multiple instruments
     that have different bin mids. 
