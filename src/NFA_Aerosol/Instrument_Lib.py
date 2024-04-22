@@ -990,11 +990,23 @@ def Load_SMPS(file,start=0,end=0):
 def Get_Bin_Mids(bin_edges):
     """
     Function to get bin_mids from bin_edges
-    
     Creator: PLF 
+    
+    Parameters
+    ----------
+    bin_edges : np.array
+        Array of sizebin edges as returned by the load instrument functions.
+
+    Returns
+    -------
+    bin_mids : np.array
+        An array of the midpoints of each sizebin. Note that the array length 
+        is len(bin_edges)-1
 
     """
-    bin_mids = [(bin_edges[i] + bin_edges[i+1]) / 2 for i in range(len(bin_edges) - 1)]    
+    
+    bin_mids = np.array([(bin_edges[i] + bin_edges[i+1]) / 2 for i in range(len(bin_edges) - 1)])    
+    
     return bin_mids
 
 ###############################################################################
@@ -1004,17 +1016,33 @@ def Get_Bin_Mids(bin_edges):
 def load_data_from_folder(folder_path, load_function, file_extension, year=None, month=None):
     """
     Generic function to load data from a folder.
-
-    Parameters:
-    - folder_path: Path to the folder containing the data files.
-    - load_function: Function to use for loading the data.
-    - file_extension: File extension of the data files.
-    - year: Year parameter for load_function (optional). -- FMPS
-    - month: Month parameter for load_function (optional). -- FMPS
     
     Creator: PLF 
     
+    Parameters
+    ----------
+    folder_path : str
+        Path to the folder containing the data files.
+    load_function : function
+        Function to use for loading the data..
+    file_extension : str
+        File extension of the data files to load.
+    year : int, optional
+        Year parameter for load_function if Load_FMPS_1 is used. The default is None.
+    month : TYPE, optional
+        Month parameter for load_function if Load_FMPS_1 is used. The default is None.
+
+    Returns
+    -------
+    sorted_data : list
+        List of the loaded data.
+    bin_edges : np.array
+        Array of sizebin edges.
+    Header : list
+        List of all the column headers of the loaded dataset.
+
     """
+    
     all_data = []
     for file_name in os.listdir(folder_path):
         if file_name.endswith(file_extension):
