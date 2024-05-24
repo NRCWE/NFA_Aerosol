@@ -380,7 +380,7 @@ def MPS_Ceff(Pdiam,flowrate=0.6):
     Parameters
     ----------
     Pdiam : np.array()
-        Array of particle diameters in um from which to determine the collection
+        Array of particle diameters in um for which to determine the collection
         efficiency.
     flowrate : float, optional
         Flowrate used during sampling in lpm. The default is 0.6 lpm.
@@ -473,6 +473,8 @@ def MPS_Ceff(Pdiam,flowrate=0.6):
     ############################## Overall Ceff ###############################
     # Calculate overall collection efficiency of the MPS
     E_total = 1 - (1-E_impaction)*(1-E_diffusion)*(1-E_interception)*(1-E_edge)
+
+    E_total[Pdiam>1.] = 1
     
     return E_total, E_impaction, E_diffusion, E_interception, E_edge
 
@@ -680,12 +682,16 @@ def Partector_Ceff(Psize):
     """
     Function to estimate the collection efficiency of the partectorTEM at the
     specified particle size in nm. The collection efficiency as a fraction is 
-    returned and can be multiplied with the measured concentration to get a 
+    returned and can be applied to the measured concentration to get a 
     corrected concentration.
     
-    It should be noted, that the expression for the collection efficiency has
-    only been validated for NaCl and Ag particles in the size range from 3 to
-    320 nm, and may therefore not be accurate at um sizes!
+    It should be noted, that the expression for the collection efficiency was fitted
+    to data from experiments with NaCl and Ag particles in the size range from 
+    3 to 320 nm, and may therefore not be accurate at um sizes! Especially, at
+    sizes larger than 4-5 um, the estimate will fail, as impaction will start to
+    play a role. There are currently no data on the matter, but theoretical 
+    caculations suggest that D50 is a roughly 11 um, but an effect can be seen
+    already at 4-5 um.
     
     Reference: Fierz, M., Kaegi, R., and Burtscher, H.;"Theoretical and 
     Experimental Evaluation of a Portable Electrostatic TEM Sampler", Aerosol
@@ -695,7 +701,8 @@ def Partector_Ceff(Psize):
     ----------
     Psize : float or np.array
         Either a single particle size given as a float, or an array of particle
-        sizes to be used for calculating the collection efficiency.
+        sizes to be used for calculating the collection efficiency. The sizes should
+        be given in nm.
 
     Returns
     -------
@@ -704,17 +711,8 @@ def Partector_Ceff(Psize):
         particle size/sizes specified as a fraction (0-1).
 
     """
-    Collection_efficiency = (1700*Psize**(-1.78))/100
+    Collection_efficiency = (0.43837287*Psize**(-0.48585362))
     
-    def is_array(param):
-        return type(param) is np.ndarray
-
-    if is_array(Psize):
-        Collection_efficiency[Psize <= 10] = 1
-    else:
-        if Psize <= 10:
-            Collection_efficiency = 1
-            
     return Collection_efficiency 
     
 ###############################################################################
