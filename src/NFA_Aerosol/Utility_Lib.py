@@ -830,13 +830,43 @@ def PM_calc(data_in,bin_edges,*PM):
 ###############################################################################
 ###############################################################################
 
+def Rolling_median(data,window_width=60):
+    """
+    A function used to take the median value of a rolling window, in order to
+    adjust the value of the central data point. The function is very good at 
+    removing spikes from datasets e.g. from DiscMini or sensor datasets. 
+
+    Parameters
+    ----------
+    data : numpy.array
+        Data array similar to those returned from load functions. The rolling
+        window will be applied to all columns except the first, which is expected
+        to be datetime values.
+    window_width : int, optional
+        Width of the rolling window. The default is 60.
+
+    Returns
+    -------
+    Data_return : numpy.array
+        Data array with the same shape as the input data, but with datapoints
+        adjusted by the rolling median operation.
+
+    """
+    Data_return = data.copy()
+    Data_return[:,1:] = pd.DataFrame(data[:,1:]).rolling(window=window_width, center=True, min_periods=1).median()
+    return Data_return
+
+###############################################################################
+###############################################################################
+###############################################################################
+
 def Save_2_Excel(data_in,header,filename,path):
     """
     Function to store data to an excel file.
 
     Parameters
     ----------
-    data_in : np.array
+    data_in : numpy.array
         An array of data as returned by the Load_xxx functions with columns
         of datetime, total conc, and size bin data
     header : list
@@ -1149,6 +1179,10 @@ def Unnormalize_dndlogdp(data_in,bin_edges):
     Data_return[:,1] = UnNormed_total
     
     return Data_return
+
+###############################################################################
+###############################################################################
+###############################################################################
 
 def calculate_average(data, start_time, end_time):
     """
