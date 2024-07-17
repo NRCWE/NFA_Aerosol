@@ -548,20 +548,20 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
     
     # Set the upper and/or lower limit of the color scale based on input
     if (y_3d[0] == 0) & (y_3d[1] != 0):
-        y_3d_min = data.min()
+        y_3d_min = np.nanmin(data)
         y_3d_max = y_3d[1]
         
     elif (y_3d[0] != 0) & (y_3d[1] == 0):
         y_3d_min = y_3d[0]
-        y_3d_max = data.max()
+        y_3d_max = np.nanmax(data)
         data[data<y_3d[0]]= y_3d[0]   
     elif (y_3d[0] != 0) or (y_3d[1] != 0):
         y_3d_min = y_3d[0]
         y_3d_max = y_3d[1]
         data[data<y_3d[0]]= y_3d[0]
     else:
-        y_3d_min = data.min()
-        y_3d_max = data.max()
+        y_3d_min = np.nanmin(data)
+        y_3d_max = np.nanmax(data)
         
     # Fill the generated mesh with particle concentration data
     if log:
