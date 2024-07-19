@@ -16,6 +16,93 @@ import os as os
 ###############################################################################
 ###############################################################################
 
+def Combine_NS_OPS(data_NS,data_OPS,starttime=None,endtime=None):
+    """
+    Function to combine Nanoscan and OPS data. If no start or end time are specified
+    then the function will use the first and last datapoints that exist for both
+    instruments. 
+    It is assumed that the NS and OPS use their standard sizebins, meaning that
+    the size bin edges are:
+        
+    NS: [ 10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
+           101.05, 134.75, 179.7 , 239.6 , 319.5 , 420.  ]
+    
+    OPS: [  300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
+            1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031.,
+           10000.]
+    
+    Parameters
+    ----------
+    data_NS : numpy.array
+        An array of data from the Nanoscan as returned by the IL.Load_Nanoscan
+        function.
+    data_OPS : numpy.array
+        An array of data from the OPS as returned by the IL.Load_OPS
+        function.
+    starttime : datetime, optional
+        The starting time for combining the two datasets. If not speicifed, a 
+        starting point is found as the first shared datetime. The default is None.
+    endtime : datetime, optional
+        The end time for combining the two datasets. If not speicifed, an end
+        point is found as the last shared datetime. The default is None.
+
+    Returns
+    -------
+    Combined_NS_OPS : numpy.array
+        An array of the combined NS and OPS datasets, with newly calculated total
+        concentrations. The last bin of the NS has been ignored and the second
+        to last has been shortened and its number reduced accordingly.
+    New_bin_edges : numpy.array
+        Array of new size bin edges in nm.
+
+    """
+    # Round all the datetime values, so they do not have seconds, in order to ease the alignment process
+    data_OPS[:,0] = np.array([dt.replace(second=0) for dt in data_OPS[:,0]])
+    data_NS[:,0] = np.array([dt.replace(second=0) for dt in data_NS[:,0]])
+    
+    # Determine the start time for combining the data either from the specified time
+    # or from the first datapoint which exist for both instruments
+    if starttime:
+        starttime = starttime.replace(second=0)
+    else:
+        starttime = max(data_OPS[0,0],data_NS[0,0])
+    
+    # Determine the end time for combining the data either from the specified time
+    # or from the last datapoint which exist for both instruments
+    if endtime:
+        endtime = endtime.replace(second=0)
+    else:
+        endtime = min(data_OPS[-1,0],data_NS[-1,0])
+    
+    # Grab the NS data within the specifed start and end times
+    NS_time_matched = data_NS[(data_NS[:,0]>=starttime) & (data_NS[:,0]<=endtime)]
+    
+    # Grab the OPS data within the specifed start and end times
+    OPS_time_matched = data_OPS[(data_OPS[:,0]>=starttime) & (data_OPS[:,0]<=endtime)]
+        
+    # the penultimate NS sizebin has its upper limit reduced from 319.5 to 300, 
+    # so the particle number is corrected accordingly
+    Factor_reduction = (300-239.6)/(319.5-239.6) 
+    New_concentration = NS_time_matched[:,-2].astype("float")*Factor_reduction
+    NS_time_matched[:,-2] = New_concentration
+    
+    # The OPS and NS data are combined, but excluding the final bin of the NS
+    Combined_NS_OPS = np.concatenate((NS_time_matched[:,:-1], OPS_time_matched[:,2:]),axis=1)
+    
+    # A new total concentration is calculated based on the combined size bin data
+    Combined_NS_OPS[:,1] = np.round(Combined_NS_OPS[:,2:].sum(axis=1).astype("float"),0)
+    
+    # As it is assumed that the standard bins are used for both the NS and OPS, the new bins will always be:
+    New_bin_edges = np.array([  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
+           101.05, 134.75, 179.7 , 239.6, 300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
+            1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.])
+    
+    return Combined_NS_OPS, New_bin_edges
+
+###############################################################################
+###############################################################################
+###############################################################################
+
 def Diffusion_loss(Data_in, bin_mids, D_tube, L, Q, T = 293, P = 101.3e3):
     """
     Determine the diffusion loss of particles in tubing. The results are reported
