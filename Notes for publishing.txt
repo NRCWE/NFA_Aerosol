@@ -1,0 +1,2 @@
+When a new version has to be published on PyPi then the version should be changed in the .toml file. This version has to be unique and should match the tag specified when publishing.
+The action should then work automatically but check that it works just to be sure.
