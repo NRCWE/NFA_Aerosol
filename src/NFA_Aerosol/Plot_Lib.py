@@ -228,131 +228,76 @@ def Direct_compare(data_in1,data_in2, bin_edges):
 ###############################################################################
 ###############################################################################
 
-def   Plot_PSD(bin_mids, *data_in, label=0, ylog=1, xlog=1, y_lim = (0,0), datatype = "number"):
+def Plot_PSD(*data_in, labels=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
     """
-    Function to plot the average particle size distribution of a data timeseries
-    or of several data timeseries if so specified. The plot will include the
-    standard error of mean as a shaded area surrounding the graph.
+    Function to plot PSDs from one or multiple instruments. Instruments can have
+    different bin mids. 
 
     Parameters
     ----------
-    bin_mids : numpy.array
-        Array of midpoints for all particle size bins. Sizes should be in nm.
-    *data_in : numpy.array
-        Size disbtribution data as returned by IL.Load_xxx with columns
-        of datetime, total mass conc, and size bin number concentrations. The 
-        data can by normalized, if dn/dlogDp size distributions are desired
-        rather than raw number distributions. The function can also take several
-        datasets, in which case they will be plotted on the same figure, and
-        with a label if so specified.
-    label : list, optional
-        List of labels to use when plotting. The number of labels must match
-        the number of datasets. The default is 0.
-    ylog : boolean, optional
-        Boolean flag (1 or 0) to turn on/off log y-axis. Default is 1.
-    xlog : boolean, optional
-        Boolean flag (1 or 0) to turn on/off log x-axis. Default is 1.
-    datatype : string, optional
-        Keyword to specify the datatype. The available options are "number",
-        "normed" and "mass". Here "normed" refers to dN/dlogDp. Default is 
-        "number"
+    *data_in : list of tuples
+        Each tuple should contain (bin_mids, size distribution data), where size distribution data
+        has the same structure as returned from Load_Instrument functions with e.g. 1st column as datetime.
+    labels : list, optional
+        List of labels for the plots. The default is None.
+    ylog : bool, optional
+        Flag to turn on/off log scale for y-axis. Defaults are True.
+    xlog : bool, optional
+        Flag to turn on/off log scale for x-axis. Defaults are True.
+    y_lim : tuple, optional
+        Limits for the y-axis. Defaults to (0, 0), which means auto-scaling.
+    datatype : str, optional
+        The type of data, which is specified on y-axis label either as (dN, cm-3), (dN/dlogDp, cm-3),
+        or (dm, µm/cm-3) for keywords "number", "normed", and "mass" respectively. Defaults to 'number'.
 
     Returns
     -------
     fig : matplotlib.figure.Figure
         Handle for the returned figure for saving.
-    ax : matplotlib.axes._subplots.AxesSubplot
+    ax : numpy.array
         Handle for the axis object of the plot.
-
+    
+    Example
+    
+    fig, ax = Plot_PSD_1((data['bin_mids_NS'], data['smps_Lab']), 
+                       (data['bin_mids_FMPS'], data['fmps_Lab']), 
+                       labels=["Data 1", "Data 2"], ylog=True, xlog=True)
+    
+    Created by PLF
+    
     """
-    
-    # List of colors used to color segments of each the activties
-    # colors = ["blue","red","green","orange","magenta","cyan","k","purple","yellow",'pink']
-    colors = ["red","blue","green","orange","magenta","cyan","k","purple","yellow",'pink']
-    # colors = ['grey', 'orange', 'green', 'blue', 'purple', 'purple', 'red', 'cyan', 'cyan', 'brown']
+    colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
 
-    # Generate figure
-    fig,ax = plt.subplots()
-    # fig,ax = plt.subplots(figsize=(5, 3))
-
-    
-    # Adjust y limits if specified
-    dat_min = []
-    dat_max = []
-    
-    # Check the number of datasets given to the function
-    if len(data_in) > 1:
-        # Run through all datasets
-        for j,i in enumerate(data_in):
-            # Get the size distribution data
-            particle_data = i[:,2:].astype("float")
-            
-            # Get max and minimum of dataset
-            dat_min += [particle_data.min()]
-            dat_max += [particle_data.max()]
-            
-            # Determine the mean and standard error of mean for the data
-            mean_psd = particle_data.mean(axis=0)
-            sem_psd = sem(particle_data,axis=0)
-            
-            # Plot the mean PSD and error with labels and legend
-            if label != 0:
-                ax.plot(bin_mids,mean_psd,label=label[j],lw=3,color=colors[j])
-                ax.fill_between(bin_mids, mean_psd-sem_psd, mean_psd+sem_psd,alpha=0.5,color=colors[j])
-                ax.legend()
-            # Plot the mean PSD and error without labels and legend
-            else:
-                ax.plot(bin_mids,mean_psd,lw=3,color=colors[j])
-                ax.fill_between(bin_mids, mean_psd-sem_psd, mean_psd+sem_psd,alpha=0.5,color=colors[j])
-    # If only 1 dataset is given
-    else:       
-        # Get the size distribution data
-        particle_data = data_in[0][:,2:].astype("float")
-        
-        # Get max and minimum of dataset
-        dat_min += [particle_data.min()]
-        dat_max += [particle_data.max()]
-        
-        # Determine the mean and standard error of mean for the data
+    fig, ax = plt.subplots()
+    for idx, (bin_mids, dataset) in enumerate(data_in):
+        particle_data = dataset[:, 2:].astype("float")
         mean_psd = particle_data.mean(axis=0)
-        sem_psd = sem(particle_data,axis=0)
+        sem_psd = sem(particle_data, axis=0)
         
-        # Plot the mean PSD and error with labels and legend
-        if label != 0:
-            ax.plot(bin_mids,mean_psd,label=label[0],lw=3,color=colors[0])
-            ax.fill_between(bin_mids, mean_psd-sem_psd, mean_psd+sem_psd,alpha=0.5,color=colors[0])
-        # Plot the mean PSD and error without labels and legend
-        else:
-            ax.plot(bin_mids,mean_psd,lw=3,color=colors[0])
-            ax.fill_between(bin_mids, mean_psd-sem_psd, mean_psd+sem_psd,alpha=0.5,color=colors[0])
-    
-    # Adjust y limits if specified
-    dat_min = min(dat_min)
-    dat_max = max(dat_max)
-    if (y_lim[0] != 0) or (y_lim[1] != 0):
-        if (y_lim[0] == 0) & (y_lim[1] != 0):
-            ax.set_ylim(dat_min*0.98,y_lim[1])
-        elif (y_lim[0] != 0) & (y_lim[1] == 0):
-            ax.set_ylim(y_lim[0],dat_max*1.02)
-        else:
-            ax.set_ylim(y_lim[0],y_lim[1])
-            
-    # Set logarithmic axis, grid, and axis labels
+        color = colors[idx % len(colors)]
+        label = labels[idx] if labels and idx < len(labels) else None
+
+        ax.plot(bin_mids, mean_psd, label=label, lw=3, color=color)
+        ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
+
+    # Set axis scales and labels
     if xlog:
         ax.set_xscale("log")
     if ylog:
         ax.set_yscale("log")
-    ax.grid(axis="both",which="both")
-    if datatype == "mass":
-        ax.set_ylabel("dm, $\mu$g$^{-3}$")
-    elif datatype == "normed":
-        # ax.set_ylabel("dN/dlogDp$_{Total}$, cm$^{-3}$")
-        ax.set_ylabel("dN/dlogDp, cm$^{-3}$")
+    ax.grid(True, which="both")
 
-    else:
-        ax.set_ylabel("dN, cm$^{-3}$")
+    y_label = "dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number" else "dm, $\mu$g$^{-3}$"
+    ax.set_ylabel(y_label)
     ax.set_xlabel("Dp, nm")
-    
+
+    # Adjust y-axis limits if specified
+    if y_lim != (0, 0):
+        ax.set_ylim(y_lim)
+
+    if labels:
+        ax.legend()
+
     return fig, ax
 
 ###############################################################################
