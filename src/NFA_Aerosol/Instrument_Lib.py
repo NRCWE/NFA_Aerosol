@@ -256,7 +256,10 @@ def Load_Discmini(file, start=0, end=0):
         is organized in columns of: time, data, filter, temperature. The header
         for each column is listed in the Header variable
     Header : list
-        List of all the headers for the columns in the Data_return array
+        List of all the headers for the columns in the Data_return array:
+        1. Particle number concentration, cm-3
+        2. Average particle size, nm (only covers from 10-300 nm)
+        3. Estimated lung deposited surface area, cm2/cm3
     
     """
     
@@ -264,7 +267,7 @@ def Load_Discmini(file, start=0, end=0):
     Discmini_time = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=0,dtype=str)
     
     
-    Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[1,2,3],dtype=str)
+    Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[2,3,4],dtype=str)
     Discmini_data = np.char.replace(Discmini_data, ',', '.').astype(float)
     
     Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%m-%Y %H:%M:%S")
