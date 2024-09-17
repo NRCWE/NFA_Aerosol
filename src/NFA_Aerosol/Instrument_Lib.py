@@ -510,7 +510,7 @@ def Load_Fourtec(file, start=0, end=0):
     Header = ["Datetime","Temperature","Relative humidity"]
     Data_return = np.array(Fourtec_Data)
 
-return Data_return, Header
+    return Data_return, Header
 
 ###############################################################################
 ###############################################################################
