@@ -1211,51 +1211,72 @@ def Get_Bin_Mids(bin_edges):
 ###############################################################################
 ###############################################################################
 
-def load_data_from_folder(folder_path, load_function, file_extension, year=None, month=None):
+def Load_data_from_folder(folder_path, load_function, file_begining="", file_extension="", year=None, month=None):
     """
     Generic function to load data from a folder.
-    
-    Creator: PLF 
-    
+
     Parameters
     ----------
     folder_path : str
-        Path to the folder containing the data files.
+        Path to the folder containing the data files. The function will NOT search
+        subfolders, so make sure the relevant data is in the specified folder.
     load_function : function
-        Function to use for loading the data..
-    file_extension : str
-        File extension of the data files to load.
+        speficiy which function should be used for treating the data.
+        Remember to call it with 'IL.' in front. 
+    file_begining : str, optional
+        If the relevant files has a defining marker in the begining of their name,
+        a str can be added here to specify that the function must only concatenate 
+        data begining with this. The default is empty.
+    file_extension : str, optional
+        If the relevant files has a defining marker in the end of their name,
+        e.g. data format ".txt", a str can be added here to specify that the
+        function must only concatenate data begining with this.
+        This restriction can be combined with file_begining to help sort through data.
+        The default is empty.
     year : int, optional
-        Year parameter for load_function if Load_FMPS_1 is used. The default is None.
-    month : TYPE, optional
-        Month parameter for load_function if Load_FMPS_1 is used. The default is None.
+        Year signifier for loading FMPS. The default is None.
+    month : int, optional
+        Month signifier for loading FMPS. The default is None.
 
     Returns
     -------
-    sorted_data : list
-        List of the loaded data.
-    bin_edges : np.array
-        Array of sizebin edges.
-    Header : list
-        List of all the column headers of the loaded dataset.
+    sorted_data: numpy
+        The concantenated data from the folder as returned from the load_function,
+        with column [0] = datetime, column [1:] = data
+    bin_edges: list, optional
+        If the data returns size-bins for bin_edges, they are returned here
+    Header: list of str
+        Header for the sorted_data
 
     """
     
     all_data = []
+    
     for file_name in os.listdir(folder_path):
-        if file_name.endswith(file_extension):
-            file_path = os.path.join(folder_path, file_name)
-            data, bin_edges, Header = load_function(file_path, year, month, start=0, end=0) if year and month \
-                                      else load_function(file_path, start=0, end=0)
-            bin_mids = [(bin_edges[i] + bin_edges[i+1]) / 2 for i in range(len(bin_edges) - 1)]
-            all_data.append((data, bin_mids, Header))
+        if file_name.startswith(file_begining) and file_name.endswith(file_extension):
 
+            file_path = os.path.join(folder_path, file_name)
+            
+            all_data.append(load_function(file_path, year, month, start=0, end=0) if year and month \
+                                      else load_function(file_path, start=0, end=0))
+
+    
     data_list = [dataset[0] for dataset in all_data]
 
     combined_data = np.concatenate(data_list)
     sorted_data = combined_data[np.argsort(combined_data[:, 0])]
+    Header=all_data[0][-1]
     
-    return sorted_data, bin_edges, Header
+    #Checks the output format from the load function and returns the relevant data
+    if len(all_data[0])==2:
+        return sorted_data, Header
+    elif len(all_data[0])==3:
+        # Care should be taken to ensure that the bin_edges are the same across the data, as it only calls the first
+        bin_edges=all_data[0][1]
+        return sorted_data, bin_edges, Header
+    else:
+        return sorted_data, all_data[0][1:]
+
 
 ###############################################################################
 ###############################################################################
