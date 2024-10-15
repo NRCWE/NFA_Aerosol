@@ -449,7 +449,63 @@ def Lung_Dep_ICRP(data_in,bin_mids,respvol,exposure_time=0,plot=0):
     Dep_AL = Dep_AL * respvol*exposure_time
     Dep_TT = Dep_TT * respvol*exposure_time
     
-    return Dep_HA,Dep_TB,Dep_AL,Dep_TT
+    return Dep_HA, Dep_TB, Dep_AL, Dep_TT
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def ICRP_fraction(bin_mids,fraction='TT'):
+    """
+    Function to calculate the lung deposited fraction for an array of bin sizes.
+    The fraction is based on the average ICRP lung deposition model.
+
+    Parameters
+    ----------
+
+    bin_mids : numpy.array
+        Array of midpoints for all particle size bins. Sizes should be in nm.
+    fraction: str
+        Type of desired fraction to be returned. Options are:
+            HA:  Head airway deposition fraction
+            TB: Tracheo bronchial deposition fraction
+            AL: Alveolar deposition fraction
+            TT: Total depostion fraction, default
+        
+    Returns
+    -------
+    HA : numpy.array
+        Fraction of particles deposited in the head airway determined.
+    TB : numpy.array
+        Fraction of particles  deposited in the tracheo bronchial region.
+    AL : numpy.array
+        Fraction of particles  deposited in the alveolar region.
+    TT : numpy.array
+        Fraction of particles deposited in entire respiratory system.
+
+    """
+    #Dep_HA,Dep_TB,Dep_AL,Dep_TT=UL.Lung_Dep_ICRP(diff_cor_peak[meth][mate][rep][inst],data['bin_mids'][inst],14,15)
+    #print("HA ", meth, mate, ": ",Dep_HA)
+    ICRP={}
+    mids=bin_mids.copy()
+    # Convert particle sizes from nm to um
+    Dp = mids*1e-3 #um
+    # Inhalable deposition fraction 
+    IF = 1 - 0.5*(1 - 1 / (1 + 0.00076 * Dp**2.8 ))
+    # Head airway deposition fraction
+    DF_HA = IF * (1 / (1 + np.exp(6.84 + 1.183 * np.log(Dp))) + 1 / (1 + np.exp(0.924 - 1.885 * np.log(Dp))))
+    # Tracheo bronchial deposition fraction
+    DF_TB = (0.00352 / Dp) * (np.exp(-0.234 * (np.log(Dp) + 3.40)**2) + 63.9 * np.exp(-0.819 * (np.log(Dp) - 1.61)**2))
+    # Alveolar deposition fraction
+    DF_AL = (0.0155 / Dp) * (np.exp(-0.416 * (np.log(Dp) + 2.84)**2) + 19.11 * np.exp(-0.482 * (np.log(Dp) - 1.362)**2)) 
+    # Total depostion fraction
+    DF_TT = DF_HA + DF_TB + DF_AL
+    # Fill out the ICRP dictionary of values
+    ICRP['HA']=DF_HA
+    ICRP['TB']=DF_TB
+    ICRP['AL']=DF_AL
+    ICRP['TT']=DF_TT
+    return ICRP[fraction]
 
 ###############################################################################
 ###############################################################################
@@ -615,9 +671,9 @@ def Normalize_dndlogdp(data_in,bin_edges):
 ###############################################################################
 ###############################################################################
 
-def num2mass(data_in,bin_mids,density=1.0):
+def num2mass(data_in, bin_mids, density=1.0, unit="mg", ICRP='none'):
     """
-    Function to convert from non-normalized number concentration to mass
+    Function to convert from number concentration to mass
     concentration, assuming spherical particles with a diameter equal to the
     size bin mid points, and a density as specified.
 
@@ -629,10 +685,20 @@ def num2mass(data_in,bin_mids,density=1.0):
     bin_mids : numpy.array
         Array containing the mid-points of all sizebins. The array should have 
         the same number of bins as the "data_in" parameter
-    density : float, optinonal
-        A density can be specified. The unit should be g/cm3. The default is a
-        density of 1.0 g/cm3.
-
+    density : float/list, optinonal
+        A density can be specified, either as a uniform single value, or as a list
+        with length equal to the number of bins. The unit should be g/cm3.
+        Default is a density of 1.0 g/cm3. 
+    unit : str, optional
+        Select the unit of the reported mass per m3: ng, mug, mg or g. Default is mg
+    ICRP : str, optional
+        Allows for adding ICRP lung deposition fraction:
+        'none': Returns the total mass concentration (mg / m3), default
+        'TT': Returns the total lung deposited mass concentration fraction (mg / m3)
+        'HA': Returns the head airway deposited mass concentration fraction (mg / m3)
+        'TB': Returns the tracheo bronchial deposited mass concentration fraction (mg / m3)
+        'AL': Returns the alveolar deposted mass concentration fraction (mg / m3)
+        
     Returns
     -------
     Data_return : numpy.array
@@ -643,38 +709,50 @@ def num2mass(data_in,bin_mids,density=1.0):
     """
     # Copy the original data
     Data_return = data_in.copy()
-    
-    # Select the relevant data and bins
-    data = Data_return[:,2:].astype("float64")
     bins = np.array(bin_mids, dtype="float64")
     
     # Determine conversion vector from number to volume, cm3
-    Num2Vol = (4./3.)*np.pi*((bins*1e-7)/2.)**3
     
+    #Calculates the volume vector for the bins in cm3
+    if ICRP=='none': Num2Vol = (np.pi/6.)*(bins*1e-7)**3
+    else: Num2Vol = (np.pi/6.)*(bins*1e-7)**3*ICRP_fraction(bins,ICRP)
+    
+    #Determines the 
+    if unit=='ng':
+        mass_factor=1e15
+    elif unit=='mug':
+        mass_factor=1e12
+    elif unit=='mg':
+        mass_factor=1e9
+    elif unit=='g':
+        mass_factor=1e6
+        
     # Convert from volume to mass via the specified density, g
-    Num2mass = Num2Vol * density
+    Num2mass = Num2Vol * density * mass_factor
     
-    # Apply the conversion vector to the particle number concentrations, g
-    dm = data * Num2mass 
+    if len(bin_mids)==len(data_in[0,:])-2:
+        # Apply the conversion vector to the particle number concentrations, g
+        Data_return[:,2:] = Data_return[:,2:].astype("float64")* Num2mass 
 
-    # Convert from g/cm3 to ug/m3 
-    mass_return = dm * 1e12
-    
-    # Determine the total mass at each timestep, ug/m3
-    total_mass = mass_return.sum(axis=1)
-
-    Data_return[:,2:] = mass_return
-    Data_return[:,1] = total_mass
-    
+        # Determine the total mass at each timestep, ug/m3
+        Data_return[:,1] = Data_return[:,2:].sum(axis=1)
+        
+    elif len(bin_mids)==len(data_in[0,:]):
+        
+        # Apply the conversion vector to the particle number concentrations, g
+        Data_return = Data_return.astype("float64")* Num2mass 
+    else:
+        return print('Error: Discrepency between number of bins and data')
+       
     return Data_return
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 
-def num2surface(data_in,bins_in):
+def num2surface(data_in, bin_mids, unit="nm2", ICRP='none'):
     """
-    Function to convert from non-normalized number concentration to surface area
+    Function to convert from number concentration to surface area
     concentration, assuming spherical particles with a diameter equal to the
     size bin mid points.
 
@@ -683,10 +761,20 @@ def num2surface(data_in,bins_in):
     data_in : numpy.array
         An array of data as returned by the Load_xxx functions with columns
         of datetime, total conc, and size bin data
-    bins : numpy.array
+    bin_mids : numpy.array
         Array containing the mid-points of all sizebins. The array should have 
         the same number of bins as the "data_in" parameter
-    
+    unit : str, optional
+        Select the unit of the reported surface area per cm3: nm2, mum2, mm2 or cm2.
+        Default is nm2
+    ICRP : str, optional
+        Allows for choosing if the surface area should be augmented by the 
+        ICRP fraction calculation:
+        'none': Returns the total SA (nm2 / cm3)
+        'TT': Returns the total lung deposited SA (nm2 / cm3)
+        'HA': Returns the head airway deposited fraction (nm2 / cm3)
+        'TB': Returns the tracheo bronchial deposited fraction (nm2 / cm3)
+        'AL': Returns the alveolar deposted fraction (nm2 / cm3)
     Returns
     -------
     Data_return : numpy.array
@@ -696,20 +784,36 @@ def num2surface(data_in,bins_in):
 
     """
     Data_return = data_in.copy()
-    data = Data_return[:,2:].astype("float64")
-    bins = np.array(bins_in, dtype="float64")
+    bins = np.array(bin_mids, dtype="float64")
     
     # nm2 surface per particle in each size bin
-    Num2surface = 4*np.pi*(bins/2.)**2
+    if ICRP=='none': Num2surface = 4*np.pi*(bins/2.)**2
+    else: Num2surface = 4*np.pi*(bins/2.)**2*ICRP_fraction(bins,ICRP)
     
-    # aply conversion (nm**2 / cm**3)
-    Surface = data * Num2surface 
-
-    # Store the size bin data
-    Data_return[:,2:] = Surface
+    if unit=='nm2':
+        unit_factor=1
+    elif unit=='mum2':
+        unit_factor=1e-6
+    elif unit=='mm2':
+        unit_factor=1e-12
+    elif unit=='cm2':
+        unit_factor=1e-14
     
-    # Calculate and store the total surface area
-    Data_return[:,1] = Surface.sum(axis=1)
+    if len(bin_mids)==len(data_in[0,:])-2:
+        
+        # apply conversion (nm**2 / cm**3)
+        Data_return[:,2:] = Data_return[:,2:].astype("float64")* Num2surface * unit_factor     
+        
+        # Calculate and store the total surface area
+        Data_return[:,1] = Data_return[:,2:].sum(axis=1)
+        
+    elif len(bin_mids)==len(data_in[0,:]):
+        data = Data_return.astype("float64")
+        
+        # apply conversion (nm**2 / cm**3)
+        Data_return = data * Num2surface  * unit_factor
+    else:
+        return print('Error: Discrepency between number of bins and data')
 
     return Data_return
 
@@ -717,9 +821,9 @@ def num2surface(data_in,bins_in):
 ###############################################################################
 ###############################################################################
 
-def num2vol(data_in,bins_in):
+def num2vol(data_in, bins_in, ICRP='none'):
     """
-    Function to convert from non-normalized number concentration to volume
+    Function to convert from number concentration to volume
     concentration, assuming spherical particles with a diameter equal to the
     size bin mid points.
 
@@ -727,38 +831,46 @@ def num2vol(data_in,bins_in):
     ----------
     data_in : numpy.array
         An array of data as returned by the Load_xxx functions with columns
-        of datetime, total conc, and size bin data
+        of datetime, total conc, and size bin data, or as size bin population only
     bins : numpy.array
         Array containing the mid-points of all sizebins. The array should have 
         the same number of bins as the "data_in" parameter
-    
+    ICRP: str
+        Allows for adding ICRP lung deposition fraction:
+        'none': Returns the total mass (nm3 / cm3)
+        'TT': Returns the total lung deposited volume ratio (nm3 / cm3)
+        'HA': Returns the head airway deposited volume ratio (nm3 / cm3)
+        'TB': Returns the tracheo bronchial deposited volume ratio (nm3 / cm3)
+        'AL': Returns the alveolar deposted volume ratio (nm3 / cm3)  
     Returns
     -------
     Data_return : numpy.array
         An array of volume concentration data equivalent to the data_in shape with 
         columns of datetime, total volume concentration in ul/m3, and size bin 
         volume concentrations in nm3/cm3.
-
     """
     Data_return = data_in.copy()
-    data = Data_return[:,2:].astype("float64")
     bins = np.array(bins_in, dtype="float64")
     
     # Calculate volume per particle for each bin
-    Num2Vol = (4./3.)*np.pi*(bins/2.)**3
+    #Num2Vol = (4./3.)*np.pi*((bins*1e-7)/2.)**3
+    if ICRP=='none': Num2Vol = (4./3.)*np.pi*((bins)/2.)**3
+    else: Num2Vol = (4./3.)*np.pi*((bins)/2.)**3*ICRP_fraction(bins,ICRP)
+    
+    if len(bins)==len(data_in[0,:])-2:
+        # apply conversion to get nm3/cm3 
+        Data_return[:,2:] = Data_return[:,2:].astype("float64")* Num2Vol
+        
+        # sum to get the total volume
+        Data_return[:,1] = Data_return[:,2:].sum(axis=1)
 
-    # apply conversion to get nm3/cm3 
-    Vol = data * Num2Vol 
-    
-    # sum to get the total volume
-    total_vol = Vol.sum(axis=1)
+    elif len(bins)==len(data_in[0,:]):
+        
+        # Select the relevant data and bins
+        Data_return = Data_return.astype("float64")* Num2Vol 
 
-    # store the converted size bin data
-    Data_return[:,2:] = Vol
-    
-    # store the converted total volume
-    Data_return[:,1] = total_vol
-    
+    else:
+        return print('Error: Discrepency between number of bins and data')
     return Data_return
     
 ###############################################################################
@@ -1159,8 +1271,7 @@ def time_rebin(data_in, resize_factor):
         less rows as these have been averaged.
 
     """
-    # Check if the remainder upon division is zero. If not, raise an error and
-    # ask for a new factor or a cropped dataset to match the factor
+    # Crop the dataset so the remainder upon division is zero.
     while data_in.shape[0]%resize_factor != 0:
         data_in = data_in[:-1,:]
     

@@ -17,6 +17,7 @@ import matplotlib.dates as mdates
 import datetime as datetime
 from scipy.stats import sem
 import matplotlib.ticker as ticker
+from scipy.optimize import curve_fit
 
 params = {'legend.fontsize': 20,
          'axes.labelsize': 25,
@@ -223,6 +224,145 @@ def Direct_compare(data_in1,data_in2, bin_edges):
         i.tick_params(axis='both', which='major', labelsize=10)
         
     return fig, axs
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
+    """
+    Function to plot the correlation between two sets of values, which have been
+    aligned so as to have sensible comparison points. 
+    X and Y must have the same length. This can be accomplished by using the
+    averaging function to generate time associated data of same dimensions. 
+       
+    Parameters
+    ----------
+    X: Numpy.array
+        First set of values. 
+    Y: Numpy.array
+        Second set of values.  
+    ax : matplotlib.axes._subplots.AxesSubplot
+        Handles for the axis of the plot.
+        Usefull for plotting multiple correlations in the same figure.
+        
+        Example:
+        '''
+        df: dataframe of values from different instruments with associated label
+        instruments: list of instruments used for comparison
+        
+        fig, axes = plt.subplots(len(instruments)-1, len(instruments)-1)
+
+        # Fill the grid with custom scatter plots, or leave empty for unwanted pairs
+        for i in range(len(instruments)-1):  # Loop over instruments 0:-1 for the horizontal axis
+            for j in range(i,len(instruments)-1):  # Loop over instruments 1: for the vertical axis
+                if i == j+1:  # Skip diagonal (Instrument 2 vs Instrument 2, etc.)
+                    axes[j, i].axis('off')
+                else:  # Use custom scatter plot function
+                    _, _ = UL.cor_plot(df[instruments[i]], df[instruments[j+1]], axes[j, i],intercept=False)
+                    if i==0:
+                        axes[j, i].set_ylabel(instruments[j+1])
+                    if j==len(instruments)-2:
+                        axes[j, i].set_xlabel(instruments[i])
+         '''                 
+    unifomr_scaling: boolean, optional
+        Boolean that can be turned off so as to not scale axis the max value.
+        
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Handle for the returned figure for saving.
+    ax : matplotlib.axes._subplots.AxesSubplot
+        Handles for the axis of the plot.
+        """
+        
+    #Defining relevant sub-functions for the function to work
+    def linear_func(x,A,B=0):
+        #Calculates a first order equation.
+        return A*x + B
+    
+    def R2(data,fit):
+        #data: 
+        # residual sum of squares
+        ss_res = np.sum((data - fit) ** 2)
+        # total sum of squares
+        ss_tot = np.sum((data - np.mean(data)) ** 2)
+        # r-squared
+        return round((1 - (ss_res / ss_tot)),3)
+    
+    #Cleaning up the data and removing rows where either value is nan
+    x=X.copy()
+    y=Y.copy()
+    x_clean=[]
+    y_clean=[]
+    
+    if len(x)==len(y):
+        for i in range(0,len(x)):
+            if np.isnan(x[i])==False and np.isnan(y[i])==False:
+                x_clean.append(x[i])
+                y_clean.append(y[i])
+        x=np.array(x_clean)
+        y=np.array(y_clean)
+    else: return "Data does not have the same size"
+    
+    if type(x[0])==datetime.datetime:
+        x=np.array(mdates.date2num(x[:]))
+
+    #Apply the fit using curve_fit for a function with or without an intercept.
+    if intercept==True:
+        parameters, covariance =curve_fit(linear_func,x,y,p0=[1, 1])
+        A, B = parameters
+        SE = np.sqrt(np.diag(covariance))
+        SE_A , SE_B = SE
+    
+    else:
+        parameters, covarience =curve_fit(linear_func,x,y,p0=[1])
+        A=parameters[0]
+        SE_A=covarience[0][0]
+        B=0
+        SE_B=0
+    
+    #Generate the fit and calculate the R^2 value
+    fit=linear_func(x,A,B)
+    r2=R2(y,fit)
+
+    if uniform_scaling==True:
+        factor=max(max(abs(x)),max(abs(y)))
+    else: factor=1
+
+    if min(x)<=0:
+        x_min=min(x)/factor
+    else:
+        x_min=0
+    if max(x)<=0:
+        x_max=0
+    else: x_max=max(x)/factor
+    
+    
+    fit_x=np.linspace(x_min,x_max,20)
+    fit_y=fit_x*A+B/factor
+
+    #If no ax is provided, figure and ax is generated here
+    if ax==False:
+        figure, ax = plt.subplots()
+    #Plot the 1:1 line
+    ax.plot([x_min,x_max],[x_min,x_max],'k:',label='1:1',lw=3)
+    #Plot the fit with associated uncertainty
+    ax.plot(fit_x, fit_y, 'r-',label='Fit',lw=3)
+    ax.fill_between(fit_x, fit_y - ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, fit_y + ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, alpha=0.33)
+    #Plot the data with scatter plot
+    ax.plot(x/factor,y/factor,'bo')
+
+    plt.xticks(fontsize=25)  
+    plt.yticks(fontsize=25) 
+
+    ax.grid(True)
+    if B==0:
+        ax.text(0,0.8,f"y= {round(A,3)}*x \n r$^{2}$:{round(r2,3)}",fontsize=25)
+    else:
+        ax.text(0,0.8,f"y= {round(A,3)}*x + {round(B,3)} \n r$^{2}$:{round(r2,3)}",fontsize=25)
+    
+    return ax.figure,ax
 
 ###############################################################################
 ###############################################################################
@@ -933,7 +1073,7 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
 ###############################################################################
 ###############################################################################
   
-def Plot_PSD_different_instruments(*data_in, labels=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
+def Plot_PSD_different_instruments(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
     """
     Similar to Plot_PSD only this function can plot the PSDs for multiple instruments
     that have different bin mids. 
@@ -942,8 +1082,14 @@ def Plot_PSD_different_instruments(*data_in, labels=None, ylog=True, xlog=True, 
     ----------
     *data_in : list of tuples
         Each tuple contains (bin_mids, size distribution data).
+        Size distribution data can either be as returned from load function, or
+        an array exlusively with bin populations. 
     labels : list, optional
         List of labels for the plots. The default is None.
+    colors: list, optional
+        List of colors for the plots. A default list is provided below.
+    linestyles: list, optional
+        list of linestyles for the plots. The default is None.
     ylog, xlog : bool, optional
         Flags to turn on/off log scales for y-axis and x-axis. Defaults are True.
     y_lim : tuple, optional
@@ -961,22 +1107,34 @@ def Plot_PSD_different_instruments(*data_in, labels=None, ylog=True, xlog=True, 
                        (data['bin_mids_FMPS'], data['fmps_Lab']), 
                        labels=["Data 1", "Data 2"], ylog=True, xlog=True)
     
-    Created by PLF
-    
     """
-    colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
-
+    if colors==None:
+        colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
+    #dlinestyles='-'
     fig, ax = plt.subplots()
     for idx, (bin_mids, dataset) in enumerate(data_in):
-        particle_data = dataset[:, 2:].astype("float")
-        mean_psd = particle_data.mean(axis=0)
-        sem_psd = sem(particle_data, axis=0)
+        #Checking whether the data format is as the data returned from a load function
+        if len(dataset[0,:])==len(bin_mids)+2:
+            particle_data = dataset[:, 2:].astype("float")
+        #Or if it is just a dataset of bin population
+        elif len(dataset[0,:])==len(bin_mids):
+            particle_data = dataset[:, :].astype("float")    
+        #If the data fits neither array width it returns an error message.
+        else: return print("Error: Issue with size of bin_mids and data")
         
+        mean_psd = particle_data.mean(axis=0)
+        
+        #runs through the supplied or default colors, labels and linestyles to correctly add it to the plot
         color = colors[idx % len(colors)]
         label = labels[idx] if labels and idx < len(labels) else None
-
-        ax.plot(bin_mids, mean_psd, label=label, lw=3, color=color)
-        ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
+        ls = linestyles[idx] if linestyles and idx < len(linestyles) else None
+        
+        ax.plot(bin_mids, mean_psd, label=label, lw=3, color=color,ls=ls)
+        
+        #confirms that there is sufficent data to make standard error plot
+        if len(particle_data[:,0])>1:
+            sem_psd = sem(particle_data, axis=0)
+            ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
 
     # Set axis scales and labels
     if xlog:
@@ -985,7 +1143,8 @@ def Plot_PSD_different_instruments(*data_in, labels=None, ylog=True, xlog=True, 
         ax.set_yscale("log")
     ax.grid(True, which="both")
 
-    y_label = "dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number" else "dm, $\mu$g$^{-3}$"
+    y_label = ("dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number"
+               else "dA, nm$^{2}$/cm$^{3}$" if datatype == "surface" else "dm, $\mu$g$^{-3}$")
     ax.set_ylabel(y_label)
     ax.set_xlabel("Dp, nm")
 

@@ -918,14 +918,31 @@ def Load_OPS(file, start=0, end=0):
         OPS_Total = np.array(OPS['Total Conc. (#/cm³)'])
         
         # Store sizebin values from the header
-        Bin_mids = np.array(list(OPS)[17:-2],dtype=float)*1000
+        Bin_mids = np.array(list(OPS)[17:-2],dtype=float)*1000 # nm
         
         # Load the lower and upper bin boundaries and combine them to get the
         # edges of all bins
         Bin_edges_LB = np.genfromtxt(file,delimiter=",",skip_header=10,skip_footer=OPS_data.shape[0]+4)[17:-1]
         Bin_edges_UB = np.genfromtxt(file,delimiter=",",skip_header=11,skip_footer=OPS_data.shape[0]+3,usecols=-2)
-        Bin_edges = np.append(Bin_edges_LB,[Bin_edges_UB])*1000
+        Bin_edges = np.append(Bin_edges_LB,[Bin_edges_UB])
         
+        #Checks unit format (dW, dW/dP, dW/dlogDp)
+        Unit = np.genfromtxt(file,delimiter=",",skip_header=6,max_rows=1,dtype="str")[1]
+        #Applies correction to report back the value in 1/cm^3
+        if 'dW/dlogDp' in Unit:
+            # Calculate the normalization vector
+            dlogDp = np.log10(Bin_edges[1:])-np.log10(Bin_edges[:-1])
+            OPS_data= OPS_data*dlogDp
+        elif 'dW/dDp' in Unit:
+            # Calculate the normalization vector
+            dDp = Bin_edges[1:]-Bin_edges[:-1]
+            OPS_data= OPS_data*dDp
+        elif 'dW' in Unit:
+            pass
+        else:
+            return print("The reported unit doesn't match either: dW, dW/dDp, dW/dlogDp")
+        
+        Bin_edges=Bin_edges*1000# nm 
         
         # # Combine and format the time and date to a datetime value
         OPS_date_and_time = np.array(OPS["Date"] + " " + OPS["Start Time"])
@@ -992,10 +1009,16 @@ def Load_OPS_Direct(file, start=0, end=0):
         # gives concentration of particles > 10 um.
         OPS = np.genfromtxt(file,delimiter=",",skip_header=38)[:,:17]
         
-        # Store OPS particle data
-        OPS_data = OPS[:,1:]
+        #Finds the deadtime to use for conversion from counts to concentration 
+        Deadtime = np.genfromtxt(file,delimiter=",",skip_header=38)[:,18] # s
         
-        # # Calculate total number concentrations
+        # Store OPS particle data
+        OPS_data = OPS[:,1:] # counts
+        
+        # Convert data from counts to particle concentrations
+        OPS_data=np.true_divide(OPS_data,16.67*(60-Deadtime[:, np.newaxis])) # counts / (16.67 cm3/s *(60 s - Deadtime)
+            
+        # Calculate total number concentrations
         OPS_Total = np.nansum(OPS_data,axis=1)
         
         # Store sizebin values, which are constant and therefore not imported
@@ -1211,7 +1234,7 @@ def Get_Bin_Mids(bin_edges):
 ###############################################################################
 ###############################################################################
 
-def Load_data_from_folder(folder_path, load_function, file_begining="", file_extension="", year=None, month=None):
+def Load_data_from_folder(folder_path, load_function, keyword="", file_extension="", year=None, month=None):
     """
     Generic function to load data from a folder.
 
@@ -1223,10 +1246,10 @@ def Load_data_from_folder(folder_path, load_function, file_begining="", file_ext
     load_function : function
         speficiy which function should be used for treating the data.
         Remember to call it with 'IL.' in front. 
-    file_begining : str, optional
-        If the relevant files has a defining marker in the begining of their name,
-        a str can be added here to specify that the function must only concatenate 
-        data begining with this. The default is empty.
+    keyword : str, optional
+        If the relevant files have a specific keyword in their name, a str can 
+        be added here to specify that the function must only concatenate 
+        data from file names containing the keyword. The default is empty.
     file_extension : str, optional
         If the relevant files has a defining marker in the end of their name,
         e.g. data format ".txt", a str can be added here to specify that the
@@ -1253,7 +1276,7 @@ def Load_data_from_folder(folder_path, load_function, file_begining="", file_ext
     all_data = []
     
     for file_name in os.listdir(folder_path):
-        if file_name.startswith(file_begining) and file_name.endswith(file_extension):
+        if (keyword in file_name) and (file_name.endswith(file_extension)):
 
             file_path = os.path.join(folder_path, file_name)
             
