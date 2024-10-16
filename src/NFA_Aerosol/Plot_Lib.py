@@ -1078,5 +1078,74 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
 ###############################################################################
 ###############################################################################
 ###############################################################################
-  
+
+def transfer_ax_elements(src_ax, dest_ax, is_shared_x=False):
+    """
+    Copies all relevant plot elements from src_ax to dest_ax.
+    If is_shared_x is True, ensures that the destination axis
+    handles x-ticks and x-labels independently.
+    """
+    # Copy lines (plots) by replotting data
+    for line in src_ax.get_lines():
+        dest_ax.plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
+    
+    # Copy scatter plots or other markers (collections) by replotting
+    for collection in src_ax.collections:
+        if isinstance(collection, LineCollection):  # Handle line collections
+            dest_ax.add_collection(collection)
+        elif isinstance(collection, PathCollection):  # Handle scatter plots
+            dest_ax.scatter(collection.get_offsets()[:, 0], collection.get_offsets()[:, 1], **collection.get_edgecolor())
+
+    # Copy vertical/horizontal lines (axvline, axhline) with try-except to handle missing lines
+    try:
+        for axvline in src_ax.get_vlines():
+            dest_ax.axvline(x=axvline.get_xdata()[0], ymin=axvline.get_ydata()[0], ymax=axvline.get_ydata()[1])
+    except AttributeError:
+        pass  # No vertical lines exist, just pass
+    
+    try:
+        for axhline in src_ax.get_hlines():
+            dest_ax.axhline(y=axhline.get_ydata()[0], xmin=axhline.get_xdata()[0], xmax=axhline.get_xdata()[1])
+    except AttributeError:
+        pass  # No horizontal lines exist, just pass
+
+    # Copy text annotations
+    for annot in src_ax.texts:
+        dest_ax.text(annot.get_position()[0], annot.get_position()[1], annot.get_text(), **annot.get_fontproperties())
+    
+    # Copy titles, labels, and grid state
+    dest_ax.set_title(src_ax.get_title())
+    dest_ax.set_xlabel(src_ax.get_xlabel())
+    dest_ax.set_ylabel(src_ax.get_ylabel())
+    dest_ax.grid(src_ax._axisbelow)  # Copy grid state
+    
+    # Copy legends if they exist
+    if src_ax.get_legend():
+        dest_ax.legend()
+
+    # Handle x-ticks and labels
+    if not is_shared_x:
+        dest_ax.set_xticks(src_ax.get_xticks())
+        dest_ax.set_xticklabels(src_ax.get_xticklabels())
+    else:
+        # If shared, ensure the ticks follow the main shared axis
+        shared_ax = src_ax.get_shared_x_axes().get_siblings(src_ax)[0] if src_ax.get_shared_x_axes() else None
+        if shared_ax:
+            dest_ax.set_xticks(shared_ax.get_xticks())
+            dest_ax.set_xticklabels(shared_ax.get_xticklabels())
+
+    # Copy y-ticks and labels
+    dest_ax.set_yticks(src_ax.get_yticks())
+    dest_ax.set_yticklabels(src_ax.get_yticklabels())
+
+    # Check if the source axes are using log scale, and apply to destination axes if so
+    if src_ax.get_xscale() == 'log':
+        dest_ax.set_xscale('log')
+    if src_ax.get_yscale() == 'log':
+        dest_ax.set_yscale('log')
+
+    # Handle shared x-axis case
+    if is_shared_x and src_ax.get_shared_x_axes():
+        src_ax.get_shared_x_axes().remove(src_ax)
+        
 
