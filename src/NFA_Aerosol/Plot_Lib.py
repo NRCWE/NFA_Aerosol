@@ -14,10 +14,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 import matplotlib.dates as mdates
-import datetime as datetime
-from scipy.stats import sem
+from matplotlib.collections import LineCollection, PathCollection
 import matplotlib.ticker as ticker
+from scipy.stats import sem
 from scipy.optimize import curve_fit
+import datetime as datetime
 
 params = {'legend.fontsize': 20,
          'axes.labelsize': 25,
