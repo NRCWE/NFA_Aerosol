@@ -1482,7 +1482,7 @@ def time_rebin(data, start=0, end=0, avg_time=5):
 
     Parameters
     ----------
-    data : numpy.array
+    data_in : numpy.array
         data in the format from a load_XXXX_function. First column must be datetime
     start : datetime, optional
         Define a starting time from which the data set should be started.
@@ -1504,35 +1504,43 @@ def time_rebin(data, start=0, end=0, avg_time=5):
         Returns the standard deviation associated with each generated average.
 
     """
-    df = pd.DataFrame(data)
+    data = data_in.copy()
     
-    df['datetime']=pd.to_datetime(df[0])
-    df=df.drop(0,axis=1)
-    df.set_index('datetime',inplace=True)
+    #Adds half a timebin so that the reported time relfects the average around that time
+    data[:,0] = data[:,0]+datetime.timedelta(0,avg_time*60/2)
+    df = pd.DataFrame(data[:, 1:], index=pd.to_datetime(data[:, 0]).tz_localize(None))
     
-    freq=str(avg_time)+'T'
-    # Calculate the 5-minute averages
+    freq = str(str(avg_time)+'T')
+    # Calculate the frequence averages and standard deviation
     avg = df.resample(freq).mean()
     std = df.resample(freq).std()
-    if start !=0 or end != 0:
-        if start!=0:
-            start_time = start#Ratio_MA[AP_start,0]
-        else:
-            start_time=data[0,0]
-        if end!=0:
-            end_time = end#Ratio_MA[AP_start,0]
-        else:
-            end_time=data[-1,0]
-        time_index = pd.date_range(start=start_time, end=end_time, freq=freq)#[:-1] 
-        avg = avg.reindex(time_index)
-        std = std.reindex(time_index)
+        
+    if start!=0:
+        #Removes the offset from a frequency divisable step, as the data otherwise spits out nan
+        offset = date2num(start)*24*60/avg_time
+        start_time = pd.Timestamp(num2date(int(offset)/24/60*avg_time)).tz_localize(None)
+    else:
+        #Removes the offset from a frequency divisable step, as the data otherwise spits out nan
+        offset = date2num(data[0,0])*24*60/avg_time
+        start_time = pd.Timestamp(num2date(int(offset)/24/60*avg_time)).tz_localize(None)
+    
+    if end!=0:
+        end_time = end
+    else:
+        end_time = data[-1,0]
+        
+    time_index = pd.date_range(start=start_time, end=end_time, freq=freq)
+    avg = avg.reindex(time_index)
+    std = std.reindex(time_index)
     # Reset the index to make the 'datetime' index a column
     avg = avg.reset_index()
     std = std.reset_index()
     # Convert the DataFrame to a NumPy array
     avg = avg.to_numpy()
     std = std.to_numpy()
+    
     return avg, std
+    
 ###############################################################################
 ###############################################################################
 ###############################################################################
