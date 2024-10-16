@@ -10,7 +10,7 @@ import datetime as datetime
 import pandas as pd
 from scipy.optimize import curve_fit
 import os as os
-from matplotlib.mdates import date2num
+from matplotlib.mdates import date2num, num2date
 
 ###############################################################################
 ###############################################################################
@@ -1467,7 +1467,7 @@ def time_crop(data_in,start=0,end=0):
 ###############################################################################
 ###############################################################################
 
-def time_rebin(data, start=0, end=0, avg_time=5):
+def time_rebin(data_in, start=0, end=0, avg_time=5):
     """
     Function to calculate the average values across time with a set time step.
     The function returns nan values where data is not present in the current
