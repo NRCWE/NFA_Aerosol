@@ -932,7 +932,7 @@ def Load_OPCN3_PM(file, start=0, end=0):
     # Convert the specifed dates and times into datetime objects. 
     # An hour is added due to time difference
     # Excess spaces in some time cells are corrected by the [-19:] indexing
-    DateTime=np.array([datetime.datetime.strptime(i.split(".")[0][-19:], '%Y-%m-%dT%H:%M:%S')+datetime.timedelta(hours=1) for i in time_s])
+    DateTime=np.array([datetime.datetime.strptime(i.split(".")[0][-19:], '%Y-%m-%dT%H:%M:%S') for i in time_s])
         
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
