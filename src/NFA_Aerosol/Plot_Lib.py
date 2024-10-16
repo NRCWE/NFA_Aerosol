@@ -359,83 +359,7 @@ def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
 ###############################################################################
 ###############################################################################
 
-def Plot_PSD(*data_in, labels=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
-    """
-    Function to plot PSDs from one or multiple instruments. Instruments can have
-    different bin mids. 
-
-    Parameters
-    ----------
-    *data_in : list of tuples
-        Each tuple should contain (bin_mids, size distribution data), where size distribution data
-        has the same structure as returned from Load_Instrument functions with e.g. 1st column as datetime.
-    labels : list, optional
-        List of labels for the plots. The default is None.
-    ylog : bool, optional
-        Flag to turn on/off log scale for y-axis. Defaults are True.
-    xlog : bool, optional
-        Flag to turn on/off log scale for x-axis. Defaults are True.
-    y_lim : tuple, optional
-        Limits for the y-axis. Defaults to (0, 0), which means auto-scaling.
-    datatype : str, optional
-        The type of data, which is specified on y-axis label either as (dN, cm-3), (dN/dlogDp, cm-3),
-        or (dm, µm/cm-3) for keywords "number", "normed", and "mass" respectively. Defaults to 'number'.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        Handle for the returned figure for saving.
-    ax : numpy.array
-        Handle for the axis object of the plot.
-    
-    Example
-    
-    fig, ax = Plot_PSD_1((data['bin_mids_NS'], data['smps_Lab']), 
-                       (data['bin_mids_FMPS'], data['fmps_Lab']), 
-                       labels=["Data 1", "Data 2"], ylog=True, xlog=True)
-    
-    Created by PLF
-    
-    """
-    colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
-
-    fig, ax = plt.subplots()
-    for idx, (bin_mids, dataset) in enumerate(data_in):
-        particle_data = dataset[:, 2:].astype("float")
-        mean_psd = particle_data.mean(axis=0)
-        sem_psd = sem(particle_data, axis=0)
-        
-        color = colors[idx % len(colors)]
-        label = labels[idx] if labels and idx < len(labels) else None
-
-        ax.plot(bin_mids, mean_psd, label=label, lw=3, color=color)
-        ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
-
-    # Set axis scales and labels
-    if xlog:
-        ax.set_xscale("log")
-    if ylog:
-        ax.set_yscale("log")
-    ax.grid(True, which="both")
-
-    y_label = "dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number" else "dm, $\mu$g$^{-3}$"
-    ax.set_ylabel(y_label)
-    ax.set_xlabel("Dp, nm")
-
-    # Adjust y-axis limits if specified
-    if y_lim != (0, 0):
-        ax.set_ylim(y_lim)
-
-    if labels:
-        ax.legend()
-
-    return fig, ax
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-def Plot_PSD_different_instruments(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
+def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
     """
     Similar to Plot_PSD only this function can plot the PSDs for multiple instruments
     that have different bin mids. 
@@ -773,6 +697,9 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
     # Set ticks on the plot to be longer
     ax1.tick_params(axis="y",which="both",direction='out', length=6, width=2)
     ax2.tick_params(axis="y",which="both",direction='out', length=6, width=2)
+
+    # Add the colorbar to the axis handles, enabling adjustments after the function is run
+    axs = np.append(axs,col)
     
     return fig,axs
 
