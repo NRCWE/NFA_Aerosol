@@ -291,19 +291,10 @@ def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
         return round((1 - (ss_res / ss_tot)),3)
     
     #Cleaning up the data and removing rows where either value is nan
-    x=X.copy()
-    y=Y.copy()
-    x_clean=[]
-    y_clean=[]
-    
-    if len(x)==len(y):
-        for i in range(0,len(x)):
-            if np.isnan(x[i])==False and np.isnan(y[i])==False:
-                x_clean.append(x[i])
-                y_clean.append(y[i])
-        x=np.array(x_clean)
-        y=np.array(y_clean)
-    else: return "Data does not have the same size"
+    z=np.column_stack((X.copy(),Y.copy())).astype('float64')
+    z=z[~np.isnan(z).any(axis=1)]
+    x=z[:,0]
+    y=z[:,1]
     
     if type(x[0])==datetime.datetime:
         x=np.array(mdates.date2num(x[:]))
@@ -428,6 +419,94 @@ def Plot_PSD(*data_in, labels=None, ylog=True, xlog=True, y_lim=(0, 0), datatype
     ax.grid(True, which="both")
 
     y_label = "dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number" else "dm, $\mu$g$^{-3}$"
+    ax.set_ylabel(y_label)
+    ax.set_xlabel("Dp, nm")
+
+    # Adjust y-axis limits if specified
+    if y_lim != (0, 0):
+        ax.set_ylim(y_lim)
+
+    if labels:
+        ax.legend()
+
+    return fig, ax
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def Plot_PSD_different_instruments(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
+    """
+    Similar to Plot_PSD only this function can plot the PSDs for multiple instruments
+    that have different bin mids. 
+
+    Parameters
+    ----------
+    *data_in : list of tuples
+        Each tuple contains (bin_mids, size distribution data).
+        Size distribution data can either be as returned from load function, or
+        an array exlusively with bin populations. 
+    labels : list, optional
+        List of labels for the plots. The default is None.
+    colors: list, optional
+        List of colors for the plots. A default list is provided below.
+    linestyles: list, optional
+        list of linestyles for the plots. The default is None.
+    ylog, xlog : bool, optional
+        Flags to turn on/off log scales for y-axis and x-axis. Defaults are True.
+    y_lim : tuple, optional
+        Limits for the y-axis. Defaults to (0, 0), which means auto-scaling.
+    datatype : str, optional
+        The type of data: 'number', 'normed', or 'mass'. Defaults to 'number'.
+
+    Returns
+    -------
+    fig, ax : matplotlib figure and axes objects.
+    
+    Example
+    
+    fig, ax = Plot_PSD_1((data['bin_mids_NS'], data['smps_Lab']), 
+                       (data['bin_mids_FMPS'], data['fmps_Lab']), 
+                       labels=["Data 1", "Data 2"], ylog=True, xlog=True)
+    
+    """
+    if colors==None:
+        colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
+    #dlinestyles='-'
+    fig, ax = plt.subplots()
+    for idx, (bin_mids, dataset) in enumerate(data_in):
+        #Checking whether the data format is as the data returned from a load function
+        if len(dataset[0,:])==len(bin_mids)+2:
+            particle_data = dataset[:, 2:].astype("float")
+        #Or if it is just a dataset of bin population
+        elif len(dataset[0,:])==len(bin_mids):
+            particle_data = dataset[:, :].astype("float")    
+        #If the data fits neither array width it returns an error message.
+        else: return print("Error: Issue with size of bin_mids and data")
+        
+        mean_psd = particle_data.mean(axis=0)
+        
+        #runs through the supplied or default colors, labels and linestyles to correctly add it to the plot
+        color = colors[idx % len(colors)]
+        label = labels[idx] if labels and idx < len(labels) else None
+        ls = linestyles[idx] if linestyles and idx < len(linestyles) else None
+        
+        ax.plot(bin_mids, mean_psd, label=label, lw=3, color=color,ls=ls)
+        
+        #confirms that there is sufficent data to make standard error plot
+        if len(particle_data[:,0])>1:
+            sem_psd = sem(particle_data, axis=0)
+            ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
+
+    # Set axis scales and labels
+    if xlog:
+        ax.set_xscale("log")
+    if ylog:
+        ax.set_yscale("log")
+    ax.grid(True, which="both")
+
+    y_label = ("dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number"
+               else "dA, nm$^{2}$/cm$^{3}$" if datatype == "surface" else "dm, $\mu$g$^{-3}$")
     ax.set_ylabel(y_label)
     ax.set_xlabel("Dp, nm")
 
@@ -1073,86 +1152,4 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
 ###############################################################################
 ###############################################################################
   
-def Plot_PSD_different_instruments(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
-    """
-    Similar to Plot_PSD only this function can plot the PSDs for multiple instruments
-    that have different bin mids. 
 
-    Parameters
-    ----------
-    *data_in : list of tuples
-        Each tuple contains (bin_mids, size distribution data).
-        Size distribution data can either be as returned from load function, or
-        an array exlusively with bin populations. 
-    labels : list, optional
-        List of labels for the plots. The default is None.
-    colors: list, optional
-        List of colors for the plots. A default list is provided below.
-    linestyles: list, optional
-        list of linestyles for the plots. The default is None.
-    ylog, xlog : bool, optional
-        Flags to turn on/off log scales for y-axis and x-axis. Defaults are True.
-    y_lim : tuple, optional
-        Limits for the y-axis. Defaults to (0, 0), which means auto-scaling.
-    datatype : str, optional
-        The type of data: 'number', 'normed', or 'mass'. Defaults to 'number'.
-
-    Returns
-    -------
-    fig, ax : matplotlib figure and axes objects.
-    
-    Example
-    
-    fig, ax = Plot_PSD_1((data['bin_mids_NS'], data['smps_Lab']), 
-                       (data['bin_mids_FMPS'], data['fmps_Lab']), 
-                       labels=["Data 1", "Data 2"], ylog=True, xlog=True)
-    
-    """
-    if colors==None:
-        colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
-    #dlinestyles='-'
-    fig, ax = plt.subplots()
-    for idx, (bin_mids, dataset) in enumerate(data_in):
-        #Checking whether the data format is as the data returned from a load function
-        if len(dataset[0,:])==len(bin_mids)+2:
-            particle_data = dataset[:, 2:].astype("float")
-        #Or if it is just a dataset of bin population
-        elif len(dataset[0,:])==len(bin_mids):
-            particle_data = dataset[:, :].astype("float")    
-        #If the data fits neither array width it returns an error message.
-        else: return print("Error: Issue with size of bin_mids and data")
-        
-        mean_psd = particle_data.mean(axis=0)
-        
-        #runs through the supplied or default colors, labels and linestyles to correctly add it to the plot
-        color = colors[idx % len(colors)]
-        label = labels[idx] if labels and idx < len(labels) else None
-        ls = linestyles[idx] if linestyles and idx < len(linestyles) else None
-        
-        ax.plot(bin_mids, mean_psd, label=label, lw=3, color=color,ls=ls)
-        
-        #confirms that there is sufficent data to make standard error plot
-        if len(particle_data[:,0])>1:
-            sem_psd = sem(particle_data, axis=0)
-            ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
-
-    # Set axis scales and labels
-    if xlog:
-        ax.set_xscale("log")
-    if ylog:
-        ax.set_yscale("log")
-    ax.grid(True, which="both")
-
-    y_label = ("dN/dlogDp, cm$^{-3}$" if datatype == "normed" else "dN, cm$^{-3}$" if datatype == "number"
-               else "dA, nm$^{2}$/cm$^{3}$" if datatype == "surface" else "dm, $\mu$g$^{-3}$")
-    ax.set_ylabel(y_label)
-    ax.set_xlabel("Dp, nm")
-
-    # Adjust y-axis limits if specified
-    if y_lim != (0, 0):
-        ax.set_ylim(y_lim)
-
-    if labels:
-        ax.legend()
-
-    return fig, ax

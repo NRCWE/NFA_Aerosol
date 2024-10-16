@@ -7,10 +7,10 @@ Created on Tue Feb 14 14:54:00 2023
 
 import numpy as np
 import datetime as datetime
-import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.optimize import curve_fit
 import os as os
+from matplotlib.mdates import date2num
 
 ###############################################################################
 ###############################################################################
@@ -248,242 +248,227 @@ def File_list(path, search = 0):
 ###############################################################################
 ###############################################################################
 
-def Fit_lognormal(bin_pop,bin_mids,mu_guess=0,sigma_guess=2,factor_guess=150):
+def Fit_lognormal(bin_pop,bin_mid,mu=[150],sigma=[2], factor=[1000],log_scaling=True,sort="Diameter", binding=[], tolerance=10.0):
     """
-    A function to fit a lognormal distribution.
-
+    A function to fit one or multiple peaks following lognormal distribution,
+    with the option for tethering values to set values. 
+    
+    An example would be an OPS dataset, with a pronounced shoulder from a mode 
+    below its diameter range. A guess for mu1 could then be 100nm,
+    which can be bound by providing the "binding" list of [True]
+    
     Parameters
     ----------
     bin_pop : numpy.array
         An array of the particle size number distribution used as the y values
-        of the lognormal fit.
+        of the lognormal fit. If composing a combination of instruments must
+        be inserted into one array. Additionally the data should be
+        !NORMALIZED!
+        for the resulting factors to be compareble to the total concentration
+        reported in the load function. 
     bin_mids : numpy.array
         An array of size bin midpoints used as the x values of the lognormal fit.
-    mu_guess : float, optinonal
-        If specified, acts as the initial guess of the particle mode, meaning
-        the size where the particle size distribution peaks. If not specified
-        the function will determine the size with the highest concentration and
-        use it as the guess. This means that the function will fail if other
-        peaks or artefacts with high number concentrations are present. 
-        The default is 0.
-    sigma_guess : float, optional
+        If composing a combination of instruments must be inserted into one array.
+    mu : list of floats, optinonal
+        If specified, acts as the initial guess of the particle modes, meaning
+        the size where the particle size distribution peaks.
+        The default is 150, but more modes can be added to the list.
+    sigma : list of floats, optional
         Initial guess for the geometric standard deviation factor. A good guess
         is the size at peak height divided by the size at 2/3 peak height in
         the decending direction. E.g. the PSD peaks at 200 nm and is at 2/3 
         height at 140 nm, so the sigma_guess parameter should be 200/140 = 1.4.
-        The default is 2.  
-    factor_guess : float, optional
+        The default is 2, but more modes can be added to the list. 
+    factor : list of floats, optional
         Initial guess for the parameter used to scale the lognormal distribution.
         Getting a good estimate can be difficult, but a guess in the same order
-        of magnitude as the peak height, is a good start e.g. 10e5. 
-        The default is 150.
-
+        of magnitude as the peak height, is a good start. 
+        The default is 1000, but more modes can be added to the list.
+    log_scaling: boolean, optional
+        Value to designate whether the fit should be done against log10 data, 
+        or the regular values. Using true values run the risk of larger modes
+        dominating the fit, potentially lossing structure for low populated 
+        modes. Default is True.
+    sort: str, optional
+        Value to designate whether the reported modes should be structured from
+        smallest to largest diameter or from most to least populated mode,
+        with the designations "Diameter" or "Number" respectively. Default is 
+        "Diameter" 
+    binding: bool list, optional
+        A boolean list for each parameter whether they must be bound or not.
+        If True the tolerance limit is put  on the bound value(s).
+        The list has the following association:
+        (mu1, sigma1, factor1, mu2, sigma2, factor2....factorN)
+        The list only needs to be filled up, to the last True value.
+        Default is 0 with no bound values.        
+    tolerance: float, optional
+        Percentage value around which the bound values can be fitted
+        
     Returns
     -------
     popt : list
-        A list containing the fitted parameters mu, sigma, and factor. To get
-        the geometric
+        A list containing the sorted fitted parameters (mu1, sigma1, factor1, mu2...)
+        either sorted by mode diameter or from most to least populated mode
     perr : list
-        Error estimates for the fitted parameters.
-
+        Error estimates for the fitted parameters in the same order as the fit.
     """
+    
     # Specify x and y data to fit
-    xdata = bin_mids
-    ydata = bin_pop
+    xdata = np.array(bin_mid,dtype='float64')
+    ydata = np.array(bin_pop,dtype='float64')
     
-    # Set an initial guess for mu, which should be the size at peak max
-    if mu_guess:
-        mu = mu_guess
-    else:
-        mu = xdata[ydata.argmax()]
+    if len(xdata)!=len(ydata):
+        return print("Discrepency between number of bins and data")
     
+    # Removes values of 0 or below from fitting
+    mask=ydata>0
+
+    xdata=xdata[mask]
+    ydata=ydata[mask]
+    if len(ydata)==0:
+        return print("Empty dataset")
+    
+    mu=mu.copy()
+    sigma=sigma.copy()
+    factor=factor.copy()
+    
+    peak_number=len(mu)
+    
+    if peak_number*3>=len(ydata):
+        return print("Peak number will lead to overfitting")
+    
+    if peak_number!=len(sigma):
+        return print("Missing input for initial guess")
+
     # Gather all the initial guesses for parameters to fit in a list
-    init_guess = [mu,sigma_guess,factor_guess]
+    init_guess=[]
+    for i in range(0,peak_number):
+        init_guess.append(mu[i])
+        init_guess.append(sigma[i])
+        init_guess.append(factor[i])
     
-    # Do the fit
-    popt, pcov   = curve_fit(Lognormal, xdata ,ydata,p0 = init_guess)
+    # Generate bounds to reduce the risk of producing impossible or irrelevant modes
+    low_bounds=[0.1*min(xdata),1.15,0]*peak_number
+    up_bounds=[10*max(xdata),5,max(max(ydata),max(factor))*2.5]*peak_number
+
+    if tolerance>0:
+      tolerance=tolerance/100
+        
+    # binding=number_to_bool_list(binding,peak_number*3)
+    for i in range(0,len(binding)):
+        if binding[i]==True:
+            low_bounds[i]=init_guess[i]*(1-tolerance)
+            up_bounds[i]=init_guess[i]*(1+tolerance)
+            
+    # Do the fit scaling by log 10 to give comparable fitting weight across different population sizes
+    if log_scaling==True:
+        popt, pcov   = curve_fit(Lognormal, xdata ,np.log10(ydata),p0 = init_guess,bounds=(low_bounds,up_bounds))
+    elif log_scaling==False:    # Fit according to the true values to best fit the main mode
+        popt, pcov   = curve_fit(Normal, xdata ,ydata,p0 = init_guess,bounds=(low_bounds,up_bounds))
+    else:
+        return print("log_scaling not set")
     
     # Get error estimates of the fits
     perr = np.sqrt(np.diag(pcov))
     
-    return popt, perr
+    #The next line of code sorts the data according to the desired focus; mode or population
+    if len(popt)>3:
+        # Step 1: Restructure both lists into triplets
+        mode=[popt[i:i+3] for i in range(0,len(popt),3)]
+        mode_perr=[perr[i:i+3] for i in range(0,len(perr),3)]
+        
+        # Step 2: Zip the corresponding elements from both lists
+        zipped = list(zip(mode, mode_perr))
+        
+        # Step 3: Sort based on the 'a' values from the first element of the triplet in 'data'
+        # Uses the sort definition to determine the order of returned modes
+        if sort=="Diameter":
+           sorted_zipped = sorted(zipped, key=lambda x: x[0][0])
+        elif sort=="Number":
+           sorted_zipped = sorted(zipped, key=lambda x: x[0][2], reverse=True)
+        # Step 4: Unzip and flatten the sorted results back into separate lists
+        sorted_mode, sorted_mode_perr = zip(*sorted_zipped)
+        Popt = [item for sublist in sorted_mode for item in sublist]
+        Perr = [item for sublist in sorted_mode_perr for item in sublist]
+    else:
+        Popt=popt
+        Perr=perr
+    # Returns the sorted fitted modes and their uncertainty.
+    return Popt, Perr
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 
-def Lognormal(bin_mid, mu,sigma,factor):
+def ICRP_fraction(bin_mids,data_in=0,respvol=25,exposure_time=0):
     """
-    The mathmatical expression of a lognormal distribution. The function can be
-    used to genereate a theoretical lognormal distribution and is also used by
-    the Fit_lognormal function.
+    Function to calculate the lung deposited fraction for an array of bin sizes
+    based on the ICRP model.
+    
+    If no data is provided and only the bins are specified the function will
+    return a vector, corresponding to the deposition fraction at each given
+    size in the bin_mids parameter.
+    
+    If particle concentration data is specified, the function calculates the 
+    lung deposited particle number, mass, or surface area in the specified 
+    airway region, based on the average ICRP lung deposition model, the 
+    measured particle distributions, the specified exposure time, and estimated 
+    respirable volume. The unit of the input data determines the output, so if 
+    mass data is used, the unit of the data should be ug/m3, in which case the 
+    function will return ug particle deposited throughout the exposure. If 
+    surface area data is used, the unit should be um2/m3 to get LDSA values of 
+    um2 deposited throughout the exposure time. 
 
     Parameters
     ----------
-    bin_mid : numpy.array
-        An array of size bin midpoints used as the x values of the lognormal fit.
-    mu : float
-        The mode of the lognormal distribution.
-    sigma : float
-        The geometric standard devaition factor of the lognormal distribution.
-    factor : float
-        A scaling parameter needed to control and fit the particle numbers.
-
-    Returns
-    -------
-    lognormal_function : function
-        The lognormal function is returned.
-
-    """
-    # The lognormal function with log transformed inputs
-    lognormal_function = ((1/(np.sqrt(2*np.pi) * np.log10(sigma))) *  np.exp(-((np.log10(bin_mid) - np.log10(mu))**2) / (2*np.log10(sigma)**2)))*factor
-    return lognormal_function
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-def Lung_Dep_ICRP(data_in,bin_mids,respvol,exposure_time=0,plot=0):
-    """
-    Function to calculate the lung deposited mass or surface area, based on the 
-    average ICRP lung deposition model, the measured particle distributions, the 
-    specified exposure time, and the estimated respirable volume. The unit of the
-    input data determines the output, so if mass data is used, the unit should
-    be ug/m3 in order to get ug deposited throughout the exposure. If surface
-    area data is used, the unit should be um2/m3 to get LDSA values of um2
-    deposited throughout the exposure time. 
-
-    Parameters
-    ----------
-    data_in : numpy.array
-        Particle size disbtribution data with columns of datetime, total conc, 
-        and size bin data
     bin_mids : numpy.array
-        Array of midpoints for all particle size bins. Sizes should be in nm..
+        Array of midpoints for all particle size bins. Sizes should be in nm.
+    data_in : numpy.array, optional
+        Particle data as returned by the load function, which is used to calculate
+        the deposited particle fraction in the specified airway region, during
+        the specified exposure time and with the specified respiration level. 
+        The default is 0.
     respvol : float
         Respirable volume rate in L/min. A setting of 25 L/min corresponds to
         light exercise, while a setting of 9 L/min correspond to a person at 
-        rest. Heavy exercise is 50 L/min.
+        rest. Heavy exercise is 50 L/min. Default is 25 L/min.
     exposure_time : int, optional
         Time of exposure in seconds. If no value is specified, the deposited 
         fraction is calculated using the length of the dataset, meaning exposure 
         for the entire duration of the measurements. The default is 0.
-    plot : int, optional
-        A boolen flag (1 or 0) to set whether or not to plot the ICRP model
-        deposition curves. The default is 0.
 
     Returns
     -------
-    Dep_HA : float
-        Total deposition of particles deposited in the head airway determined 
-        from the mean concentration of the dataset and the specified exposure 
-        time and respirable volume.
-    Dep_TB : float
-        Total deposition of particles deposited in the tracheo bronchial region 
-        determined from the mean concentration of the dataset and the specified 
-        exposure time and respirable volume.
-    Dep_AL : float
-        Total deposition of particles deposited in the alveolar region determined 
-        from the mean concentration of the dataset and the specified exposure 
-        time and respirable volume.
-    Dep_TT : float
-        Total deposition of particles deposited in respiratory system determined 
-        from the mean concentration of the dataset and the specified exposure time 
-        and respirable volume.
-
-    """
-    # Convert particle sizes from nm to um
-    Dp = bin_mids*1e-3 #um
-    
-    # Inhalable deposition fraction 
-    IF = 1 - 0.5*(1 - 1 / (1 + 0.00076 * Dp**2.8 ))
-     
-    # Head airway deposition fraction
-    DF_HA = IF * (1 / (1 + np.exp(6.84 + 1.183 * np.log(Dp))) + 1 / (1 + np.exp(0.924 - 1.885 * np.log(Dp))))
-    
-    # Tracheo bronchial deposition fraction
-    DF_TB = (0.00352 / Dp) * (np.exp(-0.234 * (np.log(Dp) + 3.40)**2) + 63.9 * np.exp(-0.819 * (np.log(Dp) - 1.61)**2))
-    
-    # Alveolar deposition fraction
-    DF_AL = (0.0155 / Dp) * (np.exp(-0.416 * (np.log(Dp)+2.84)**2) + 19.11 * np.exp(-0.482 * (np.log(Dp) - 1.362)**2)) 
-    
-    # Total depostion fraction
-    DF_TT = DF_HA + DF_TB + DF_AL
-    
-    # Plot the depositon graf if specified
-    if plot:
-        plt.figure()
-        plt.plot(bin_mids,IF,label="Inhalable")
-        plt.plot(bin_mids,DF_TT,label="Total Depositiion")
-        plt.plot(bin_mids,DF_HA,label="Head Airways")
-        plt.plot(bin_mids,DF_TB,label="Tracho Bronchial")
-        plt.plot(bin_mids,DF_AL,label="Alveolar")
-        plt.legend()
-        plt.xscale("log")
-        plt.grid(axis="both",which="both")
-        plt.ylabel("Deposition Fraction")
-        plt.xlabel("Particle size, nm")
-    
-    # Calculate the volume of inhaled air for the specified time
-    respvol = respvol * 1e-3 / 60 # [L/min] -> [m3/s]
-    if exposure_time == 0:
-        duration = data_in[-1,0] - data_in[0,0]
-        exposure_time = duration.seconds
-    
-    # Calculate the deposited particles in the different airway regions
-    Dep_conc_HA = data_in[:,2:] * DF_HA # deposited in head airways at each time
-    Dep_conc_TB = data_in[:,2:] * DF_TB # deposited in Tracheo bronchial region at each time
-    Dep_conc_AL = data_in[:,2:] * DF_AL # deposited in Alveolar region at each time
-    Dep_conc_TT = data_in[:,2:] * DF_TT # deposited in total at each time
-    
-    # Sum depostion of all sizebins and take the average to get the average
-    # deposition during the measurement.
-    Dep_HA = Dep_conc_HA.sum(axis=1).mean() 
-    Dep_TB = Dep_conc_TB.sum(axis=1).mean() 
-    Dep_AL = Dep_conc_AL.sum(axis=1).mean() 
-    Dep_TT = Dep_conc_TT.sum(axis=1).mean() 
-    
-    # Calculate the deposited fraction, based on the volume of inhaled air
-    Dep_HA = Dep_HA * respvol*exposure_time 
-    Dep_TB = Dep_TB * respvol*exposure_time
-    Dep_AL = Dep_AL * respvol*exposure_time
-    Dep_TT = Dep_TT * respvol*exposure_time
-    
-    return Dep_HA, Dep_TB, Dep_AL, Dep_TT
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-def ICRP_fraction(bin_mids,fraction='TT'):
-    """
-    Function to calculate the lung deposited fraction for an array of bin sizes.
-    The fraction is based on the average ICRP lung deposition model.
-
-    Parameters
-    ----------
-
-    bin_mids : numpy.array
-        Array of midpoints for all particle size bins. Sizes should be in nm.
-    fraction: str
-        Type of desired fraction to be returned. Options are:
-            HA:  Head airway deposition fraction
+    ICRP : dict
+        If no particle data is provided the function returns a dictionary,
+        with vectors containing the deposition fraction for each airway
+        region for each particle size in the bin_mids input parameter. 
+        
+        If particle data is also provided, the returned dictionary will also
+        contain exposure data, meaning the number, mass, or surface area 
+        (depending on the unit of the input particle data) of the
+        deposited particles in each airway region at the given exposure time
+        and respiratory rate.
+        
+        The keys for accessing the the different results:
+            HA: Head airway deposition fraction
             TB: Tracheo bronchial deposition fraction
             AL: Alveolar deposition fraction
-            TT: Total depostion fraction, default
-        
-    Returns
-    -------
-    HA : numpy.array
-        Fraction of particles deposited in the head airway determined.
-    TB : numpy.array
-        Fraction of particles  deposited in the tracheo bronchial region.
-    AL : numpy.array
-        Fraction of particles  deposited in the alveolar region.
-    TT : numpy.array
-        Fraction of particles deposited in entire respiratory system.
-
+            TT: Total depostion fraction
+            HA Deposition: Deposited particle number, mass or surface area in 
+                           the head airways at the given exposure time and 
+                           respiratory rate.
+            TB Deposition: Deposited particle number, mass or surface area in 
+                           the tracheo bronchial region at the given exposure 
+                           time and respiratory rate.
+            AL Deposition: Deposited particle number, mass or surface area in 
+                           the Alveolar at the given exposure time and 
+                           respiratory rate.
+            TT Deposition: Total deposited particle number, mass or surface 
+                           area in the airways at the given exposure time and 
+                           respiratory rate.
     """
+    
     #Dep_HA,Dep_TB,Dep_AL,Dep_TT=UL.Lung_Dep_ICRP(diff_cor_peak[meth][mate][rep][inst],data['bin_mids'][inst],14,15)
     #print("HA ", meth, mate, ": ",Dep_HA)
     ICRP={}
@@ -505,7 +490,154 @@ def ICRP_fraction(bin_mids,fraction='TT'):
     ICRP['TB']=DF_TB
     ICRP['AL']=DF_AL
     ICRP['TT']=DF_TT
-    return ICRP[fraction]
+    
+    # If particle data is given, calculate the deposited particle fraction in
+    # the specified airway region, during the exposure time at the speicified
+    # respiration rate.
+    if data_in:
+        # Calculate the volume of inhaled air for the specified time
+        respvol = respvol * 1e-3 / 60 # [L/min] -> [m3/s]
+        if exposure_time == 0:
+            duration = data_in[-1,0] - data_in[0,0]
+            exposure_time = duration.seconds
+        for i in ICRP.keys():
+            # Calculate the deposited particles in eahc airway region
+            Deposited_conc = data_in[:,2:] * ICRP[i]
+            
+            # Sum depostion of all sizebins and take the average to get the average
+            # deposition during the measurement or the specified exposure time.
+            Avg_Deposition = Deposited_conc.sum(axis=1).mean() 
+            
+            # Calculate the deposited number, mass or surface area, based on 
+            # the volume of inhaled air
+            ICRP[i+" Deposition"] = Avg_Deposition * respvol*exposure_time
+    
+    return ICRP
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def linear_fit(X,Y,intercept=True):
+    """
+    Function to detmine the correlation between two sets of values, which have been
+    aligned so as to have sensible comparison points. 
+    X and Y must have the same length. This can be accomplished by using the
+    averaging function to generate time associated data of same dimensions. 
+       
+    Parameters
+    ----------
+    X: Numpy.array
+        First set of values. 
+    Y: Numpy.array
+        Second set of values.
+    intercept: boolean 
+        Determines whether the fit should be forced through 0.
+        
+    Returns
+    -------
+    Fit: dictionary
+        {A: Fitted slope
+         B: Fitted intercept
+         SE_A: Uncertainty of slope
+         SE_B: Uncertainty of intercept}
+    R2: float,
+        Quality of fit
+        """
+    #Defining relevant sub-functions for the function to work
+    def linear_func(x,A,B=0):
+        #Calculates a first order equation.
+        return A*x + B
+    
+    def R2(data,fit):
+        #data: 
+        # residual sum of squares
+        ss_res = np.sum((data - fit) ** 2)
+        # total sum of squares
+        ss_tot = np.sum((data - np.mean(data)) ** 2)
+        # r-squared
+        return round((1 - (ss_res / ss_tot)),3)
+    
+    #Cleaning up the data and removing rows where either value is nan
+    x=X.copy()
+    y=Y.copy()
+
+    z=np.column_stack((x,y)).astype('float64')
+    z=z[~np.isnan(z).any(axis=1)]
+
+    if type(x[0])==datetime.datetime:
+        x=np.array(date2num(x[:]))
+
+    #Apply the fit using curve_fit for a function with or without an intercept.
+    if intercept==True:
+        parameters, covariance =curve_fit(linear_func,z[:,0],z[:,1],p0=[1, 1])
+        A, B = parameters
+    
+        SE = np.sqrt(np.diag(covariance))
+        SE_A , SE_B = SE
+    
+        fit=linear_func(x,A,B)
+        r2=R2(y,fit)
+
+    else:
+        parameters, covarience =curve_fit(linear_func,z[:,0],z[:,1],p0=[1])
+        A=parameters[0]
+        SE_A=covarience[0][0]
+        B=0
+        SE_B=0
+        
+        fit=linear_func(x,A)
+        r2=R2(y,fit)
+        
+    Fit={'A':A,'B':B,'SE_A':SE_A,'SE_B':SE_B}
+    return Fit,r2
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def Lognormal(bin_mid, *params):
+    """
+    The mathmatical expression of a log10 (lognormal distribution). The function can be
+    used to genereate a theoretical lognormal distribution and is also used by
+    the Fit_lognormal function. 
+    
+    Parameters
+    ----------
+    bin_mid : numpy.array
+        An array of size bin midpoints used as the x values of the lognormal fit.
+    *params: list
+        params is a list contaning the triplet of information making out a:
+        peak center: mu, peak spread: sigma, and population: factor
+        The list should be structured up to N peaks:
+            paratmers=[mu1,sigma1,factor1,mu2,sigma2,factor2...factor N]
+            
+    mu : float
+        The mode of the lognormal distribution, the center of peak.
+    sigma : float
+        The geometric standard devaition factor of the lognormal distribution.
+    factor : float
+        A scaling parameter needed to control and fit the particle numbers.
+
+    Returns
+    -------
+    lognormal_function : numpy.array
+        Returns an array of the same size as bin_mid populated by the sum of
+        the desired peaks at diameter size in bin_mid.
+
+    """
+    mu=np.array(params[0::3])
+    sigma=np.array(params[1::3])
+    factor=np.array(params[2::3])
+    
+    population=0
+    for i in range(0,len(mu)):
+            
+        population+=((1/(np.sqrt(2*np.pi) * np.log10(sigma[i]))) *
+                np.exp(-((np.log10(bin_mid) - np.log10(mu[i]))**2) /
+                (2*np.log10(sigma[i])**2)))*factor[i] 
+   
+    return np.log10(population)
 
 ###############################################################################
 ###############################################################################
@@ -620,6 +752,54 @@ def MPS_Ceff(Pdiam,flowrate=0.6):
     E_total[Pdiam>1.] = 1
     
     return E_total, E_impaction, E_diffusion, E_interception, E_edge
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def Normal(bin_mid, *params):
+    """
+    The mathmatical expression of a lognormal distribution. The function can be
+    used to genereate a theoretical lognormal distribution and is also used by
+    the Fit_lognormal function. It assumes a minimum of 2 peaks, but can fit
+    additional peaks if given prompt.
+
+    Parameters
+    ----------
+    bin_mid : numpy.array
+        An array of size bin midpoints used as the x values of the lognormal fit.
+    *params: list
+        params is a list contaning the triplet of information making out a:
+        peak center: mu, peak spread: sigma, and population: factor
+        The list should be structured:
+            paratmers=[mu1,sigma1,factor1,mu2,sigma2,factor2...]
+            
+    mu : float
+        The mode of the lognormal distribution.
+    sigma : float
+        The geometric standard devaition factor of the lognormal distribution.
+    factor : float
+        A scaling parameter needed to control and fit the particle numbers.
+
+    Returns
+    -------
+    lognormal_function : numpy.array
+        Returns an array of the same size as bin_mid populated by the sum of
+        the desired peaks at diameter size in bin_mid.
+
+    """
+    mu=np.array(params[0::3])
+    sigma=np.array(params[1::3])
+    factor=np.array(params[2::3])
+    
+    population=0
+    for i in range(0,len(mu)):
+        print(f"Iteration {i}: sigma[i] = {sigma[i]}, mu[i] = {mu[i]}, factor[i] = {factor[i]}")
+        population+=((1/(np.sqrt(2*np.pi) * sigma[i])) * 
+                     np.exp(-((bin_mid - mu[i])**2) /
+                     (2*sigma[i])**2))*factor[i] 
+   
+    return population
 
 ###############################################################################
 ###############################################################################
@@ -1029,11 +1209,17 @@ def PM_calc(data_in,bin_edges,*PM):
 ###############################################################################
 ###############################################################################
 
-def Rolling_median(data,window_width=60):
+def Rolling_window(data,start=0,end=0,window_width=60,window_type="median",crop=0):
     """
-    A function used to take the median value of a rolling window, in order to
-    adjust the value of the central data point. The function is very good at 
-    removing spikes from datasets e.g. from DiscMini or sensor datasets. 
+    A function used to take the median or mean value within a rolling window, 
+    in order to adjust the value of the central data point. A start and end 
+    point of the dataseries can be set, and the width of the rolling window
+    adjusted. Furthermore it can be specified if datapoints should be kept,
+    maintaining the shape of the original dataset, or whether datapoints should
+    be dropped, so the dataseries is rebinned in terms of time and reduced in
+    length by a factor equal to the window size. The function is very good at 
+    removing spikes from datasets e.g. from DiscMini or sensor datasets when 
+    using a median window. 
 
     Parameters
     ----------
@@ -1041,18 +1227,53 @@ def Rolling_median(data,window_width=60):
         Data array similar to those returned from load functions. The rolling
         window will be applied to all columns except the first, which is expected
         to be datetime values.
+    start : datetime, optional
+        Starttime of the dataset. All datapoints prior to the starting point
+        will be dropped. The default is 0, meaning that all datapoints are used.
+    end : datetime, optional
+        Endtime of the dataset. All datapoints after the endpoint will be 
+        dropped. The default is 0, meaning that all datapoints are used.
     window_width : int, optional
-        Width of the rolling window. The default is 60.
+        Width of the rolling window. The default is 60 to e.g. convert from
+        seconds to minutes.
+    window_type : str, optional
+        Set which window type to use. Currently only "mean" and "median" rolling
+        windows are available. The default is "median".
+    crop : boolean, optional
+        Whether to keep all datapoints or drop the datapoints, so to resize the
+        dataset by a factor equal to the window size. The default is 0.
 
     Returns
     -------
     Data_return : numpy.array
-        Data array with the same shape as the input data, but with datapoints
-        adjusted by the rolling median operation.
+        Data array wwhere datapoints have been adjusted by the rolling median 
+        or mean operation. The data array will have the same shape as the input 
+        data if crop = 0, or will have been rebinned if crop=1.
 
     """
+    
     Data_return = data.copy()
-    Data_return[:,1:] = pd.DataFrame(data[:,1:]).rolling(window=window_width, center=True, min_periods=1).median()
+    if window_type == "median":
+        Data_return[:,1:] = pd.DataFrame(data[:,1:]).rolling(window=window_width, center=True, min_periods=1).median()
+    elif window_type == "mean":
+        Data_return[:,1:] = pd.DataFrame(data[:,1:]).rolling(window=window_width, center=True, min_periods=1).mean()
+    else:
+        print('No such method implemented, currently implemented window_types are: "median" and "mean"')
+        return
+        
+    # Find the index of times fulfilling the start and/or end time conditions
+    if (start != 0) or (end != 0):
+        if (start != 0) & (end == 0):
+            index = Data_return[:,0]>=start
+        elif (start == 0) & (end != 0):
+            index = Data_return[:,0]<=end
+        else:
+            index = (Data_return[:,0]>=start) & (Data_return[:,0]<=end)
+        
+        # Select the data rows fulfilling the time criterias
+        Data_return = Data_return[index,:]
+    if crop:
+        Data_return = Data_return[::window_width,:]
     return Data_return
 
 ###############################################################################
@@ -1193,7 +1414,7 @@ def segment_dataset(data_in,segments):
             # experiment time is between the specified start and end times and 
             # set these indexes to j+1
             for k in range(len(starts)):
-                index[(data_in[:,0]>starts[k]) & (data_in[:,0]<ends[k])] = j+1
+                index[(data_in[:,0]>=starts[k]) & (data_in[:,0]<=ends[k])] = j+1
     
     return index
 
@@ -1224,7 +1445,6 @@ def time_crop(data_in,start=0,end=0):
     Data_return : numpy.array
         New array following the same structure as the input array but with new
         times.
-
     """
     # Store the time
     times = data_in[:,0]
@@ -1232,11 +1452,11 @@ def time_crop(data_in,start=0,end=0):
     # Find the index of times fulfilling the start and/or end time conditions
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = times>start
+            index = times>=start
         elif (start == 0) & (end != 0):
-            index = times<end
+            index = times<=end
         else:
-            index = (times>start) & (times<end)
+            index = (times>=start) & (times<=end)
         
         # Select the data rows fulfilling the time criterias
         Data_return = data_in[index,:]
@@ -1247,52 +1467,72 @@ def time_crop(data_in,start=0,end=0):
 ###############################################################################
 ###############################################################################
 
-def time_rebin(data_in, resize_factor):
+def time_rebin(data, start=0, end=0, avg_time=5):
     """
-    Rebin a dataset to lower the time resolution and reduce noise. Concentrations 
-    will be averaged over the specified resize facotr e.g. going from every 
-    second to every 5th second if the resize_factor is 5. 
+    Function to calculate the average values across time with a set time step.
+    The function returns nan values where data is not present in the current
+    dataset, which is usefull when having to combine several datasets with
+    different lengths.
     
-    NOTE! The function will drop datapoints at the end of the dataset untill
-    the number of datapoints is divisible by the resize factor.
+    NOTE! The function currently only works if the specified start time is
+    viable with the avg_time, meaning that if avg_time is set to 1, so every
+    minute, the starting time may not include seconds. Similarly, if the 
+    avg_time is set to 0.5, the starting time must be at either 0 or 30 seconds
+    on the clock.
 
     Parameters
     ----------
-    data_in : numpy.array
-        An array of data as returned by the Load_xxx functions with columns
-        of datetime, total conc, and size bin data
-    resize_factor : int
-        Factor of which to downsize the dataset with.
+    data : numpy.array
+        data in the format from a load_XXXX_function. First column must be datetime
+    start : datetime, optional
+        Define a starting time from which the data set should be started.
+        This value can be before or after first entry.
+        The default 0, so it uses the first entry as start
+    end : datetime, optional
+        Define an ending time from which the data set should be concluded.
+        This value can be before or after last entry.
+        The default 0, so it uses the last entry as end
+    avg_time : float, optional
+        Averaging time steps. The unit is in minutes, with a default of 5 
+        minutes.
 
     Returns
     -------
-    Data_return : numpy.array
-        Rebinned array following the same structure as the input array but with 
-        less rows as these have been averaged.
+    avg : numpy.array
+        Returns the data 
+    std : numpy.array
+        Returns the standard deviation associated with each generated average.
 
     """
-    # Crop the dataset so the remainder upon division is zero.
-    while data_in.shape[0]%resize_factor != 0:
-        data_in = data_in[:-1,:]
+    df = pd.DataFrame(data)
     
-    # Copy the dataset to avoid issues with potential parent relationship
-    Reshape = data_in.copy()
+    df['datetime']=pd.to_datetime(df[0])
+    df=df.drop(0,axis=1)
+    df.set_index('datetime',inplace=True)
     
-    start = Reshape[0,0]
-    Reshape[:,0] = Reshape[:,0]-start
-    
-    # Determine the new length after averaging
-    new_length = Reshape.shape[0]//resize_factor
-    
-    # Determine the most efficient shape to use for rebinning
-    new_shape = new_length,Reshape.shape[0]//new_length,Reshape.shape[1],1
-    
-    # Reshape the initial array and mean over the specified number of rows
-    Data_return = Reshape.reshape(new_shape).mean(-1).mean(1)
-    Data_return[:,0] = Data_return[:,0]+start
-        
-    return Data_return    
-
+    freq=str(avg_time)+'T'
+    # Calculate the 5-minute averages
+    avg = df.resample(freq).mean()
+    std = df.resample(freq).std()
+    if start !=0 or end != 0:
+        if start!=0:
+            start_time = start#Ratio_MA[AP_start,0]
+        else:
+            start_time=data[0,0]
+        if end!=0:
+            end_time = end#Ratio_MA[AP_start,0]
+        else:
+            end_time=data[-1,0]
+        time_index = pd.date_range(start=start_time, end=end_time, freq=freq)#[:-1] 
+        avg = avg.reindex(time_index)
+        std = std.reindex(time_index)
+    # Reset the index to make the 'datetime' index a column
+    avg = avg.reset_index()
+    std = std.reset_index()
+    # Convert the DataFrame to a NumPy array
+    avg = avg.to_numpy()
+    std = std.to_numpy()
+    return avg, std
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -1381,33 +1621,3 @@ def Unnormalize_dndlogdp(data_in,bin_edges):
 ###############################################################################
 ###############################################################################
 ###############################################################################
-
-def calculate_average(data, start_time, end_time):
-    """
-    Function to calculate the average of the second column of a data array 
-    within a specified time range. The data array is expected to have datetime 
-    objects in the first column and numerical values in the second column.
-
-    Parameters
-    ----------
-    data : numpy.array
-        A 2D array where the first column contains datetime objects and the 
-        second column contains numerical values for which the average is to be calculated.
-    start_time : datetime
-        The start time for the period over which to calculate the average.
-    end_time : datetime
-        The end time for the period over which to calculate the average.
-
-    Returns
-    -------
-    float
-        The average of the second column of the data array within the specified 
-        time range. Returns NaN if no data is available in the time span.
-        
-        Created by: PLF
-    """
-    filtered_data = data[(data[:, 0] >= start_time) & (data[:, 0] <= end_time)]
-    if len(filtered_data) > 0:
-        return np.mean(filtered_data[:, 1])
-    else:
-        return np.nan  # Return NaN if no data is available in the time span
