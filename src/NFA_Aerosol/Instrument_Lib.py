@@ -56,11 +56,11 @@ def Load_Aethalometer(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Aethalometer_Datetime>start
+            index = Aethalometer_Datetime>=start
         elif (start == 0) & (end != 0):
-            index = Aethalometer_Datetime<end
+            index = Aethalometer_Datetime<=end
         else:
-            index = (Aethalometer_Datetime>start) & (Aethalometer_Datetime<end)
+            index = (Aethalometer_Datetime>=start) & (Aethalometer_Datetime<=end)
         Aethalometer_Datetime = Aethalometer_Datetime[index]
         Aethalometer_Data = Aethalometer_Data[index]
     
@@ -154,11 +154,11 @@ def Load_APS(file, start=0, end=0):
     # Select data within specified time interval - if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = APS_datetime>start
+            index = APS_datetime>=start
         elif (start == 0) & (end != 0):
-            index = APS_datetime<end
+            index = APS_datetime<=end
         else:
-            index = (APS_datetime>start) & (APS_datetime<end)
+            index = (APS_datetime>=start) & (APS_datetime<=end)
         APS_datetime = APS_datetime[index]
         APS_total = APS_total[index]
         APS_data_aero = APS_data_aero[index]
@@ -217,11 +217,11 @@ def Load_CPC(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = CPC_datetimes>start
+            index = CPC_datetimes>=start
         elif (start == 0) & (end != 0):
-            index = CPC_datetimes<end
+            index = CPC_datetimes<=end
         else:
-            index = (CPC_datetimes>start) & (CPC_datetimes<end)
+            index = (CPC_datetimes>=start) & (CPC_datetimes<=end)
         CPC_datetimes = CPC_datetimes[index]
         CPC_data = CPC_data[index]
     
@@ -229,6 +229,77 @@ def Load_CPC(file, start=0, end=0):
     Data_return = np.column_stack([CPC_datetimes,CPC_data])
     Header = ["Datetime", "Concentration"]
     return Data_return, Header
+
+###############################################################################
+###############################################################################
+###############################################################################
+
+def Load_data_from_folder(folder_path, load_function, keyword="", file_extension="", year=None, month=None):
+    """
+    Generic function to load data from a folder.
+
+    Parameters
+    ----------
+    folder_path : str
+        Path to the folder containing the data files. The function will NOT search
+        subfolders, so make sure the relevant data is in the specified folder.
+    load_function : function
+        speficiy which function should be used for treating the data.
+        Remember to call it with 'IL.' in front. 
+    keyword : str, optional
+        If the relevant files have a specific keyword in their name, a str can 
+        be added here to specify that the function must only concatenate 
+        data from file names containing the keyword. The default is empty.
+    file_extension : str, optional
+        If the relevant files has a defining marker in the end of their name,
+        e.g. data format ".txt", a str can be added here to specify that the
+        function must only concatenate data begining with this.
+        This restriction can be combined with file_begining to help sort through data.
+        The default is empty.
+    year : int, optional
+        Year signifier for loading FMPS. The default is None.
+    month : int, optional
+        Month signifier for loading FMPS. The default is None.
+
+    Returns
+    -------
+    sorted_data: numpy
+        The concantenated data from the folder as returned from the load_function,
+        with column [0] = datetime, column [1:] = data
+    bin_edges: list, optional
+        If the data returns size-bins for bin_edges, they are returned here
+    Header: list of str
+        Header for the sorted_data
+
+    """
+    
+    all_data = []
+    
+    for file_name in os.listdir(folder_path):
+        if (keyword in file_name) and (file_name.endswith(file_extension)):
+
+            file_path = os.path.join(folder_path, file_name)
+            
+            all_data.append(load_function(file_path, year, month, start=0, end=0) if year and month \
+                                      else load_function(file_path, start=0, end=0))
+
+    
+    data_list = [dataset[0] for dataset in all_data]
+
+    combined_data = np.concatenate(data_list)
+    sorted_data = combined_data[np.argsort(combined_data[:, 0])]
+    Header=all_data[0][-1]
+    
+    #Checks the output format from the load function and returns the relevant data
+    if len(all_data[0])==2:
+        return sorted_data, Header
+    elif len(all_data[0])==3:
+        # Care should be taken to ensure that the bin_edges are the same across the data, as it only calls the first
+        bin_edges=all_data[0][1]
+        return sorted_data, bin_edges, Header
+    else:
+        return sorted_data, all_data[0][1:]
+
 
 ###############################################################################
 ###############################################################################
@@ -269,18 +340,20 @@ def Load_Discmini(file, start=0, end=0):
     
     Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[2,3,4],dtype=str)
     Discmini_data = np.char.replace(Discmini_data, ',', '.').astype(float)
-    
-    Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%m-%Y %H:%M:%S")
+    try:
+        Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%b-%Y %H:%M:%S")
                                       for i in Discmini_time])
-    
+    except:
+        Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%m-%Y %H:%M:%S")
+                                      for i in Discmini_time])
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Discmini_datetimes>start
+            index = Discmini_datetimes>=start
         elif (start == 0) & (end != 0):
-            index = Discmini_datetimes<end
+            index = Discmini_datetimes<=end
         else:
-            index = (Discmini_datetimes>start) & (Discmini_datetimes<end)
+            index = (Discmini_datetimes>=start) & (Discmini_datetimes<=end)
         Discmini_datetimes = Discmini_datetimes[index]
         Discmini_data = Discmini_data[index]
         
@@ -338,11 +411,11 @@ def Load_ELPI(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = ELPI_time>start
+            index = ELPI_time>=start
         elif (start == 0) & (end != 0):
-            index = ELPI_time<end
+            index = ELPI_time<=end
         else:
-            index = (ELPI_time>start) & (ELPI_time<end)
+            index = (ELPI_time>=start) & (ELPI_time<=end)
         ELPI_time = ELPI_time[index]
         ELPI_Total = ELPI_Total[index]
         ELPI_data = ELPI_data[index]
@@ -444,11 +517,11 @@ def Load_FMPS(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = FMPS_datetime>start
+            index = FMPS_datetime>=start
         elif (start == 0) & (end != 0):
-            index = FMPS_datetime<end
+            index = FMPS_datetime<=end
         else:
-            index = (FMPS_datetime>start) & (FMPS_datetime<end)
+            index = (FMPS_datetime>=start) & (FMPS_datetime<=end)
         FMPS_datetime = FMPS_datetime[index]
         FMPS_Total = FMPS_Total[index]
         FMPS_data = FMPS_data[index]
@@ -497,11 +570,11 @@ def Load_Fourtec(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Fourtec_Datetime>start
+            index = Fourtec_Datetime>=start
         elif (start == 0) & (end != 0):
-            index = Fourtec_Datetime<end
+            index = Fourtec_Datetime<=end
         else:
-            index = (Fourtec_Datetime>start) & (Fourtec_Datetime<end)
+            index = (Fourtec_Datetime>=start) & (Fourtec_Datetime<=end)
         Fourtec_Datetime = Fourtec_Datetime[index]
         Fourtec_Data = Fourtec_Data[index]
         
@@ -569,11 +642,11 @@ def Load_Grimm_new(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Grimm_datetime>start
+            index = Grimm_datetime>=start
         elif (start == 0) & (end != 0):
-            index = Grimm_datetime<end
+            index = Grimm_datetime<=end
         else:
-            index = (Grimm_datetime>start) & (Grimm_datetime<end)
+            index = (Grimm_datetime>=start) & (Grimm_datetime<=end)
         Grimm_datetime = Grimm_datetime[index]
         Grimm_total = Grimm_total[index]
         Grimm_data = Grimm_data[index]
@@ -648,11 +721,11 @@ def Load_Grimm_old(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Grimm_datetime>start
+            index = Grimm_datetime>=start
         elif (start == 0) & (end != 0):
-            index = Grimm_datetime<end
+            index = Grimm_datetime<=end
         else:
-            index = (Grimm_datetime>start) & (Grimm_datetime<end)
+            index = (Grimm_datetime>=start) & (Grimm_datetime<=end)
         Grimm_datetime = Grimm_datetime[index]
         Grimm_total = Grimm_total[index]
         Grimm_data = Grimm_data[index]
@@ -720,11 +793,11 @@ def Load_Nanoscan(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Nanoscan_time>start
+            index = Nanoscan_time>=start
         elif (start == 0) & (end != 0):
-            index = Nanoscan_time<end
+            index = Nanoscan_time<=end
         else:
-            index = (Nanoscan_time>start) & (Nanoscan_time<end)
+            index = (Nanoscan_time>=start) & (Nanoscan_time<=end)
         Nanoscan_time = Nanoscan_time[index]
         Nanoscan_Total = Nanoscan_Total[index]
         Nanoscan_data = Nanoscan_data[index]
@@ -789,7 +862,7 @@ def Load_OPCN3_Bin(file, start=0, end=0):
     # Convert the specifed dates and times into datetime objects. 
     # An hour is added due to time difference
     # Excess spaces in some time cells are corrected by the [-19:] indexing
-    DateTime=np.array([datetime.datetime.strptime(i.split(".")[0][-19:], '%Y-%m-%dT%H:%M:%S')+datetime.timedelta(hours=1) for i in Raw_data[:,0]])
+    DateTime=np.array([datetime.datetime.strptime(i.split(".")[0][-19:], '%Y-%m-%dT%H:%M:%S') for i in Raw_data[:,0]])
     
     # Bin edges of the OPCN3
     Bin_edges = np.array([0.35, 0.46, 0.66, 1.0, 1.3, 1.7, 2.3, 3.0, 4.0, 5.2, 6.5, 
@@ -805,11 +878,11 @@ def Load_OPCN3_Bin(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = DateTime>start
+            index = DateTime>=start
         elif (start == 0) & (end != 0):
-            index = DateTime<end
+            index = DateTime<=end
         else:
-            index = (DateTime>start) & (DateTime<end)
+            index = (DateTime>=start) & (DateTime<=end)
         DateTime = DateTime[index]
         Pbin_data = Pbin_data[index]
     
@@ -864,11 +937,11 @@ def Load_OPCN3_PM(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = DateTime>start
+            index = DateTime>=start
         elif (start == 0) & (end != 0):
-            index = DateTime<end
+            index = DateTime<=end
         else:
-            index = (DateTime>start) & (DateTime<end)
+            index = (DateTime>=start) & (DateTime<=end)
         DateTime = DateTime[index]
         PM_data = PM_data[index]
     
@@ -918,14 +991,31 @@ def Load_OPS(file, start=0, end=0):
         OPS_Total = np.array(OPS['Total Conc. (#/cm³)'])
         
         # Store sizebin values from the header
-        Bin_mids = np.array(list(OPS)[17:-2],dtype=float)*1000
+        Bin_mids = np.array(list(OPS)[17:-2],dtype=float)*1000 # nm
         
         # Load the lower and upper bin boundaries and combine them to get the
         # edges of all bins
         Bin_edges_LB = np.genfromtxt(file,delimiter=",",skip_header=10,skip_footer=OPS_data.shape[0]+4)[17:-1]
         Bin_edges_UB = np.genfromtxt(file,delimiter=",",skip_header=11,skip_footer=OPS_data.shape[0]+3,usecols=-2)
-        Bin_edges = np.append(Bin_edges_LB,[Bin_edges_UB])*1000
+        Bin_edges = np.append(Bin_edges_LB,[Bin_edges_UB])
         
+        #Checks unit format (dW, dW/dP, dW/dlogDp)
+        Unit = np.genfromtxt(file,delimiter=",",skip_header=6,max_rows=1,dtype="str")[1]
+        #Applies correction to report back the value in 1/cm^3
+        if 'dW/dlogDp' in Unit:
+            # Calculate the normalization vector
+            dlogDp = np.log10(Bin_edges[1:])-np.log10(Bin_edges[:-1])
+            OPS_data= OPS_data*dlogDp
+        elif 'dW/dDp' in Unit:
+            # Calculate the normalization vector
+            dDp = Bin_edges[1:]-Bin_edges[:-1]
+            OPS_data= OPS_data*dDp
+        elif 'dW' in Unit:
+            pass
+        else:
+            return print("The reported unit doesn't match either: dW, dW/dDp, dW/dlogDp")
+        
+        Bin_edges=Bin_edges*1000# nm 
         
         # # Combine and format the time and date to a datetime value
         OPS_date_and_time = np.array(OPS["Date"] + " " + OPS["Start Time"])
@@ -935,11 +1025,11 @@ def Load_OPS(file, start=0, end=0):
         # Select data within specified time interval if specified
         if (start != 0) or (end != 0):
             if (start != 0) & (end == 0):
-                index = OPS_datetime>start
+                index = OPS_datetime>=start
             elif (start == 0) & (end != 0):
-                index = OPS_datetime<end
+                index = OPS_datetime<=end
             else:
-                index = (OPS_datetime>start) & (OPS_datetime<end)
+                index = (OPS_datetime>=start) & (OPS_datetime<=end)
             OPS_datetime = OPS_datetime[index]
             OPS_Total = OPS_Total[index]
             OPS_data = OPS_data[index]
@@ -992,10 +1082,16 @@ def Load_OPS_Direct(file, start=0, end=0):
         # gives concentration of particles > 10 um.
         OPS = np.genfromtxt(file,delimiter=",",skip_header=38)[:,:17]
         
-        # Store OPS particle data
-        OPS_data = OPS[:,1:]
+        #Finds the deadtime to use for conversion from counts to concentration 
+        Deadtime = np.genfromtxt(file,delimiter=",",skip_header=38)[:,18] # s
         
-        # # Calculate total number concentrations
+        # Store OPS particle data
+        OPS_data = OPS[:,1:] # counts
+        
+        # Convert data from counts to particle concentrations
+        OPS_data=np.true_divide(OPS_data,16.67*(60-Deadtime[:, np.newaxis])) # counts / (16.67 cm3/s *(60 s - Deadtime)
+            
+        # Calculate total number concentrations
         OPS_Total = np.nansum(OPS_data,axis=1)
         
         # Store sizebin values, which are constant and therefore not imported
@@ -1021,11 +1117,11 @@ def Load_OPS_Direct(file, start=0, end=0):
         # Select data within specified time interval if specified
         if (start != 0) or (end != 0):
             if (start != 0) & (end == 0):
-                index = OPS_datetime>start
+                index = OPS_datetime>=start
             elif (start == 0) & (end != 0):
-                index = OPS_datetime<end
+                index = OPS_datetime<=end
             else:
-                index = (OPS_datetime>start) & (OPS_datetime<end)
+                index = (OPS_datetime>=start) & (OPS_datetime<=end)
             OPS_datetime = OPS_datetime[index]
             OPS_Total = OPS_Total[index]
             OPS_data = OPS_data[index]
@@ -1083,11 +1179,11 @@ def Load_Partector(file, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = Partector_Datetime>start
+            index = Partector_Datetime>=start
         elif (start == 0) & (end != 0):
-            index = Partector_Datetime<end
+            index = Partector_Datetime<=end
         else:
-            index = (Partector_Datetime>start) & (Partector_Datetime<end)
+            index = (Partector_Datetime>=start) & (Partector_Datetime<=end)
         Partector_Datetime = Partector_Datetime[index]
         Partector_Data = Partector_Data[index]
     
@@ -1166,11 +1262,11 @@ def Load_SMPS(file,start=0,end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = SMPS_time>start
+            index = SMPS_time>=start
         elif (start == 0) & (end != 0):
-            index = SMPS_time<end
+            index = SMPS_time<=end
         else:
-            index = (SMPS_time>start) & (SMPS_time<end)
+            index = (SMPS_time>=start) & (SMPS_time<=end)
         SMPS_time = SMPS_time[index]
         SMPS_total = SMPS_total[index]
         SMPS_data = SMPS_data[index]
@@ -1180,139 +1276,6 @@ def Load_SMPS(file,start=0,end=0):
     Header = ["Datetime","Total"] + list(Bin_mids)
     
     return Data_return, Bin_edges, Header
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-def Get_Bin_Mids(bin_edges):
-    """
-    Function to get bin_mids from bin_edges
-    Creator: PLF 
-    
-    Parameters
-    ----------
-    bin_edges : np.array
-        Array of sizebin edges as returned by the load instrument functions.
-
-    Returns
-    -------
-    bin_mids : np.array
-        An array of the midpoints of each sizebin. Note that the array length 
-        is len(bin_edges)-1
-
-    """
-    
-    bin_mids = np.array([(bin_edges[i] + bin_edges[i+1]) / 2 for i in range(len(bin_edges) - 1)])    
-    
-    return bin_mids
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-def Load_data_from_folder(folder_path, load_function, file_begining="", file_extension="", year=None, month=None):
-    """
-    Generic function to load data from a folder.
-
-    Parameters
-    ----------
-    folder_path : str
-        Path to the folder containing the data files. The function will NOT search
-        subfolders, so make sure the relevant data is in the specified folder.
-    load_function : function
-        speficiy which function should be used for treating the data.
-        Remember to call it with 'IL.' in front. 
-    file_begining : str, optional
-        If the relevant files has a defining marker in the begining of their name,
-        a str can be added here to specify that the function must only concatenate 
-        data begining with this. The default is empty.
-    file_extension : str, optional
-        If the relevant files has a defining marker in the end of their name,
-        e.g. data format ".txt", a str can be added here to specify that the
-        function must only concatenate data begining with this.
-        This restriction can be combined with file_begining to help sort through data.
-        The default is empty.
-    year : int, optional
-        Year signifier for loading FMPS. The default is None.
-    month : int, optional
-        Month signifier for loading FMPS. The default is None.
-
-    Returns
-    -------
-    sorted_data: numpy
-        The concantenated data from the folder as returned from the load_function,
-        with column [0] = datetime, column [1:] = data
-    bin_edges: list, optional
-        If the data returns size-bins for bin_edges, they are returned here
-    Header: list of str
-        Header for the sorted_data
-
-    """
-    
-    all_data = []
-    
-    for file_name in os.listdir(folder_path):
-        if file_name.startswith(file_begining) and file_name.endswith(file_extension):
-
-            file_path = os.path.join(folder_path, file_name)
-            
-            all_data.append(load_function(file_path, year, month, start=0, end=0) if year and month \
-                                      else load_function(file_path, start=0, end=0))
-
-    
-    data_list = [dataset[0] for dataset in all_data]
-
-    combined_data = np.concatenate(data_list)
-    sorted_data = combined_data[np.argsort(combined_data[:, 0])]
-    Header=all_data[0][-1]
-    
-    #Checks the output format from the load function and returns the relevant data
-    if len(all_data[0])==2:
-        return sorted_data, Header
-    elif len(all_data[0])==3:
-        # Care should be taken to ensure that the bin_edges are the same across the data, as it only calls the first
-        bin_edges=all_data[0][1]
-        return sorted_data, bin_edges, Header
-    else:
-        return sorted_data, all_data[0][1:]
-
-
-###############################################################################
-###############################################################################
-###############################################################################
-
-def Get_Start_Day(file):
-    """
-    Function to get the start date from FMPS txt files 
-    Used in Load_FMPS_1 below
-    
-    Parameters
-    ----------
-    file : str
-        Path to a .txt file generated by the FMPS
-
-    Returns
-    -------
-    day_start : 
-        int
-        
-    Creator: PLF
-
-    """
-    with open(file, 'r') as file:
-        for line in file:
-            if line.startswith('Date/Time Start:'):
-                # Extract the date and time part from the line
-                date_time_str = line.split('Date/Time Start:,"')[1].split('"')[0]
-    
-                # Parsing the string into a datetime object
-                parsed_date = datetime.datetime.strptime(date_time_str, "%A, %B %d, %Y %I:%M:%S %p")
-    
-                # Extracting the day
-                day_start = parsed_date.day
-                break
-    return day_start
 
 ###############################################################################
 ###############################################################################
@@ -1364,7 +1327,18 @@ def Load_FMPS_1(file, year, month, start=0, end=0):
     FMPS_time = np.genfromtxt(file,delimiter=",",skip_header=15,dtype=str)[:,0]
     
     # Convert time and dates to a datetime
-    day_start = Get_Start_Day(file)
+    with open(file, 'r') as file:
+        for line in file:
+            if line.startswith('Date/Time Start:'):
+                # Extract the date and time part from the line
+                date_time_str = line.split('Date/Time Start:,"')[1].split('"')[0]
+    
+                # Parsing the string into a datetime object
+                parsed_date = datetime.datetime.strptime(date_time_str, "%A, %B %d, %Y %I:%M:%S %p")
+    
+                # Extracting the day
+                day_start = parsed_date.day
+                break
     FMPS_datetime = []
     prev_hour_24 = None
     day_offset = 0
@@ -1396,11 +1370,11 @@ def Load_FMPS_1(file, year, month, start=0, end=0):
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):
-            index = FMPS_datetime>start
+            index = FMPS_datetime>=start
         elif (start == 0) & (end != 0):
-            index = FMPS_datetime<end
+            index = FMPS_datetime<=end
         else:
-            index = (FMPS_datetime>start) & (FMPS_datetime<end)
+            index = (FMPS_datetime>=start) & (FMPS_datetime<=end)
         FMPS_datetime = FMPS_datetime[index]
         FMPS_Total = FMPS_Total[index]
         FMPS_data = FMPS_data[index]
