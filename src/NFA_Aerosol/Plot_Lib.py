@@ -1081,10 +1081,30 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
 
 def transfer_ax_elements(src_ax, dest_ax, is_shared_x=False):
     """
-    Copies all relevant plot elements from src_ax to dest_ax.
-    If is_shared_x is True, ensures that the destination axis
-    handles x-ticks and x-labels independently.
+    Function to transfer relevant plot elements from one axes object to another
+    in order to "move" a plot from one figure to another. This is relevant, if
+    a plot was generated with one of the plotting functions and is to be 
+    combined with other plots in a new subplot collection. The is_shared_x 
+    variable can be set to True, if the copied plot previously shared its x-axis
+    with another plot, meaning that it does not have any xticks and xticklabels.
+
+    Parameters
+    ----------
+    src_ax : matplotlib.axes._axes.Axes
+        Source axis handle from which elements will be copied.
+    dest_ax : matplotlib.axes._axes.Axes
+        Destination axis handle to where elements will be copied.
+    is_shared_x : boolean, optional
+        Can be set to True, if the copied plot previously shared its x-axis with 
+        another plot, meaning that it does not have any xticks and xticklabels. 
+        The default is False.
+
+    Returns
+    -------
+    None, as elements are added directly to the new axis object.
+
     """
+    
     # Copy lines (plots) by replotting data
     for line in src_ax.get_lines():
         dest_ax.plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
@@ -1148,4 +1168,6 @@ def transfer_ax_elements(src_ax, dest_ax, is_shared_x=False):
     if is_shared_x and src_ax.get_shared_x_axes():
         src_ax.get_shared_x_axes().remove(src_ax)
         
-
+###############################################################################
+###############################################################################
+###############################################################################
