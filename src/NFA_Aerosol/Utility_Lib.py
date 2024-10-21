@@ -10,7 +10,7 @@ import datetime as datetime
 import pandas as pd
 from scipy.optimize import curve_fit
 import os as os
-from matplotlib.mdates import date2num, num2date
+from matplotlib.dates import date2num, num2date
 
 ###############################################################################
 ###############################################################################
@@ -494,7 +494,7 @@ def ICRP_fraction(bin_mids,data_in=0,respvol=25,exposure_time=0):
     # If particle data is given, calculate the deposited particle fraction in
     # the specified airway region, during the exposure time at the speicified
     # respiration rate.
-    if data_in:
+    if data_in!=0:
         # Calculate the volume of inhaled air for the specified time
         respvol = respvol * 1e-3 / 60 # [L/min] -> [m3/s]
         if exposure_time == 0:
@@ -788,8 +788,9 @@ def Normal(bin_mid, *params):
         the desired peaks at diameter size in bin_mid.
 
     """
-    mu=np.array(params[0::3])
-    sigma=np.array(params[1::3])
+    bin_mid=np.log10(bin_mid)
+    mu=np.log10(np.array(params[0::3]))
+    sigma=np.log10(np.array(params[1::3]))
     factor=np.array(params[2::3])
     
     population=0
@@ -797,7 +798,7 @@ def Normal(bin_mid, *params):
         print(f"Iteration {i}: sigma[i] = {sigma[i]}, mu[i] = {mu[i]}, factor[i] = {factor[i]}")
         population+=((1/(np.sqrt(2*np.pi) * sigma[i])) * 
                      np.exp(-((bin_mid - mu[i])**2) /
-                     (2*sigma[i])**2))*factor[i] 
+                     (2*sigma[i]**2)))*factor[i] 
    
     return population
 
@@ -895,7 +896,7 @@ def num2mass(data_in, bin_mids, density=1.0, unit="mg", ICRP='none'):
     
     #Calculates the volume vector for the bins in cm3
     if ICRP=='none': Num2Vol = (np.pi/6.)*(bins*1e-7)**3
-    else: Num2Vol = (np.pi/6.)*(bins*1e-7)**3*ICRP_fraction(bins,ICRP)
+    else: Num2Vol = (np.pi/6.)*(bins*1e-7)**3*ICRP_fraction(bins)[ICRP]
     
     #Determines the 
     if unit=='ng':
@@ -968,7 +969,7 @@ def num2surface(data_in, bin_mids, unit="nm2", ICRP='none'):
     
     # nm2 surface per particle in each size bin
     if ICRP=='none': Num2surface = 4*np.pi*(bins/2.)**2
-    else: Num2surface = 4*np.pi*(bins/2.)**2*ICRP_fraction(bins,ICRP)
+    else: Num2surface = 4*np.pi*(bins/2.)**2*ICRP_fraction(bins)[ICRP]
     
     if unit=='nm2':
         unit_factor=1
@@ -1035,7 +1036,7 @@ def num2vol(data_in, bins_in, ICRP='none'):
     # Calculate volume per particle for each bin
     #Num2Vol = (4./3.)*np.pi*((bins*1e-7)/2.)**3
     if ICRP=='none': Num2Vol = (4./3.)*np.pi*((bins)/2.)**3
-    else: Num2Vol = (4./3.)*np.pi*((bins)/2.)**3*ICRP_fraction(bins,ICRP)
+    else: Num2Vol = (4./3.)*np.pi*((bins)/2.)**3*ICRP_fraction(bins)[ICRP]
     
     if len(bins)==len(data_in[0,:])-2:
         # apply conversion to get nm3/cm3 

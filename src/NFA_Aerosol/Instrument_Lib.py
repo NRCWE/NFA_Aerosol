@@ -115,7 +115,13 @@ def Load_APS(file, start=0, end=0):
 
     """
     # Load all data from the txt file
-    APS = pd.read_csv(file, sep=',', header=6, encoding='latin-1')
+    for seperator in [',','\t',';']:
+        APS = pd.read_csv(file, sep=seperator, header=6, encoding='latin-1')
+        if len(np.array(APS)[0,:])==1:
+            pass
+        else:
+            break
+
     
     # Store the total concentration reported by the instrument
     APS_total = np.array([float(i.split("(")[0]) for i in APS['Total Conc.']])
@@ -129,8 +135,8 @@ def Load_APS(file, start=0, end=0):
     APS_data_optic = np.array(APS[APS_sizes_header_optic])
     
     # Read the lower and upper bounds of the aerodynamic bin range
-    Lower_bound = np.round(np.genfromtxt(file,delimiter=",",skip_header=4,skip_footer=APS_total.shape[0]+2)[1]*1000)
-    Upper_bound = np.round(np.genfromtxt(file,delimiter=",",skip_header=5,skip_footer=APS_total.shape[0]+1)[1]*1000)
+    Lower_bound = np.round(np.genfromtxt(file,delimiter=seperator,skip_header=4,skip_footer=APS_total.shape[0]+2)[1]*1000)
+    Upper_bound = np.round(np.genfromtxt(file,delimiter=seperator,skip_header=5,skip_footer=APS_total.shape[0]+1)[1]*1000)
     
     # Calculate the midpoints of all the aerodynamic size bins
     Bin_mids = np.array(APS_sizes_header_aero[1:],dtype="float")*1000
@@ -1189,13 +1195,12 @@ def Load_Partector(file, start=0, end=0):
     
     # insert the datetime values to the data cube
     Partector_Data.insert(0, "Datetime", Partector_Datetime, True)
-    
+    Partector_Data=np.delete(Partector_Data,1,1)
     # Get the header for each column and convert the DataFrame to an array
-    Header = list(Partector_Data)
+    Header = ["Datetime","LDSA"]#list(Partector_Data)
     Data_return = np.array(Partector_Data)
     
-    return Data_return, Header
-
+    return Data_return[:,0:2], Header
 ###############################################################################
 ###############################################################################
 ###############################################################################
