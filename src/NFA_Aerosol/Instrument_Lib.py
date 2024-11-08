@@ -1094,8 +1094,14 @@ def Load_OPS_Direct(file, start=0, end=0):
         # Store OPS particle data
         OPS_data = OPS[:,1:] # counts
         
+        #Finds the sample length in seconds
+        SL=OPS =  np.genfromtxt(file,delimiter=",",skip_header=9,skip_footer=OPS.shape[0]+28,dtype=str)[1]
+        SL= np.array(SL.split(":"))
+        Sample_length=3600*int(SL[0])+60*int(SL[1])+int(SL[2])
+        OPS = np.genfromtxt(file,delimiter=",",skip_header=38)[:,:17]
+        
         # Convert data from counts to particle concentrations
-        OPS_data=np.true_divide(OPS_data,16.67*(60-Deadtime[:, np.newaxis])) # counts / (16.67 cm3/s *(60 s - Deadtime)
+        OPS_data=np.true_divide(OPS_data,16.67*(Sample_length-Deadtime[:, np.newaxis])) # counts / (16.67 cm3/s *(60 s - Deadtime)
             
         # Calculate total number concentrations
         OPS_Total = np.nansum(OPS_data,axis=1)
