@@ -16,7 +16,7 @@ from matplotlib.dates import date2num, num2date
 ###############################################################################
 ###############################################################################
 
-def Combine_NS_OPS(data_NS,data_OPS,starttime=None,endtime=None):
+def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
     """
     Function to combine Nanoscan and OPS data. If no start or end time are specified
     then the function will use the first and last datapoints that exist for both
@@ -108,13 +108,20 @@ def Combine_NS_OPS(data_NS,data_OPS,starttime=None,endtime=None):
     Combined_NS_OPS[:,1] = np.round(Combined_NS_OPS[:,2:].sum(axis=1).astype("float"),0)
     
     # As it is assumed that the standard bins are used for both the NS and OPS, the new bins will always be:
-    New_bin_edges = np.array([  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
-           101.05, 134.75, 179.7 , 239.6, 300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
-            1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.])
-    
+    if OPS_bin==[]:
+        New_bin_edges = [  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
+        101.05, 134.75, 179.7 , 239.6, 300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
+        1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.])
+    else:
+        New_bin_edges = [  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
+        101.05, 134.75, 179.7 , 239.6]
+        for i in OPS_bin:
+            New_bin_edges.append(i)
+        
+    New_bin_edges = np.array(New_bin_edges)
     New_bin_mids = New_bin_edges[:-1]+(New_bin_edges[1:]-New_bin_edges[:-1])/2
-    
     Header = ["Datetime","Total"] + list(New_bin_mids)
+    
     return Combined_NS_OPS, New_bin_edges, Header
 
 ###############################################################################
