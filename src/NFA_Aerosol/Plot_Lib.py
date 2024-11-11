@@ -16,7 +16,7 @@ from matplotlib.colors import LogNorm
 import matplotlib.dates as mdates
 from matplotlib.collections import LineCollection, PathCollection
 import matplotlib.ticker as ticker
-from scipy.stats import sem
+from scipy.stats import sem, theilslopes
 from scipy.optimize import curve_fit
 import datetime as datetime
 
@@ -238,7 +238,7 @@ def Direct_compare(data_in1,data_in2, bin_edges):
 ###############################################################################
 ###############################################################################
 
-def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True):
+def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True, outlier_influence=True):
     """
     Function to plot the correlation between two sets of values, which have been
     aligned so as to have sensible comparison points. 
@@ -291,7 +291,6 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True):
         return A*x + B
     
     def R2(data,fit):
-        #data: 
         # residual sum of squares
         ss_res = np.sum((data - fit) ** 2)
         # total sum of squares
@@ -307,37 +306,42 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True):
     
     if type(x[0])==datetime.datetime:
         x=np.array(mdates.date2num(x[:]))
-
-    #Apply the fit using curve_fit for a function with or without an intercept.
-    if intercept==True:
-        parameters, covariance =curve_fit(linear_func,x,y,p0=[1, 1])
-        A, B = parameters
-        SE = np.sqrt(np.diag(covariance))
-        SE_A , SE_B = SE
     
+    # This method works well but it's sensitive towards outliers
+    if outlier_influence:
+        #Apply the fit using curve_fit for a function with or without an intercept.
+        if intercept==True:
+            parameters, covariance =curve_fit(linear_func,x,y,p0=[1, 1])
+            A, B = parameters
+            SE = np.sqrt(np.diag(covariance))
+            SE_A , SE_B = SE
+        
+        else:
+            parameters, covarience =curve_fit(linear_func,x,y,p0=[1])
+            A=parameters[0]
+            SE_A=covarience[0][0]
+            B=0
+            SE_B=0
     else:
-        parameters, covarience =curve_fit(linear_func,x,y,p0=[1])
-        A=parameters[0]
-        SE_A=covarience[0][0]
-        B=0
-        SE_B=0
-    
+        # This method is less sensitive towards 
+        A, B, _, _ = theilslopes(y,x)
+        
     #Generate the fit and calculate the R^2 value
     fit=linear_func(x,A,B)
     r2=R2(y,fit)
 
     if uniform_scaling==True:
         factor=max(max(abs(x)),max(abs(y)))
-    else: factor=1
-
+    else: 
+        factor=1
     if min(x)<=0:
         x_min=min(x)/factor
     else:
         x_min=0
     if max(x)<=0:
         x_max=0
-    else: x_max=max(x)/factor
-    
+    else: 
+        x_max= z.max()/factor
     
     fit_x=np.linspace(x_min,x_max,20)
     fit_y=fit_x*A+B/factor
@@ -345,25 +349,20 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True):
     #If no ax is provided, figure and ax is generated here
     if ax_in==False:
         figure, ax = plt.subplots()
+        plt.xticks(fontsize=25)  
+        plt.yticks(fontsize=25) 
+        ax.legend(fontsize=25)
+        ax.grid(True)
     else:
         ax = ax_in
     #Plot the 1:1 line
-    ax.plot([x_min,x_max],[x_min,x_max],'k:',label='1:1',lw=3)
-    #Plot the fit with associated uncertainty
-    ax.plot(fit_x, fit_y, 'r-',label='Fit',lw=3)
-    ax.fill_between(fit_x, fit_y - ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, fit_y + ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, alpha=0.33)
+    ax.plot([x_min,x_max],[x_min,x_max],ls="--",c="k",label='1:1 Line',lw=3)
     #Plot the data with scatter plot
     ax.plot(x/factor,y/factor,'bo')
-
-    plt.xticks(fontsize=25)  
-    plt.yticks(fontsize=25) 
-
-    ax.grid(True)
-    if B==0:
-        ax.text(0,0.8,f"y= {round(A,3)}*x \n r$^{2}$:{round(r2,3)}",fontsize=25)
-    else:
-        ax.text(0,0.8,f"y= {round(A,3)}*x + {round(B,3)} \n r$^{2}$:{round(r2,3)}",fontsize=25)
-    
+    #Plot the fit with associated uncertainty
+    ax.plot(fit_x, fit_y, 'r-',lw=3, label="y={:.2f}$\cdot$x+{:.2f}, R$^2$={:.2f}".format(A, B, r2))
+    if outlier_influence:
+        ax.fill_between(fit_x, fit_y - ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, fit_y + ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, alpha=0.33)
     return ax.figure,ax
 
 ###############################################################################
