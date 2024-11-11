@@ -340,18 +340,42 @@ def Load_Discmini(file, start=0, end=0):
     
     """
     
-    # Load the entire Discmini file
-    Discmini_time = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=0,dtype=str)
-    
-    
-    Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[2,3,4],dtype=str)
-    Discmini_data = np.char.replace(Discmini_data, ',', '.').astype(float)
     try:
+        Discmini_time = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=0,dtype=str)
         Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%b-%Y %H:%M:%S")
                                       for i in Discmini_time])
+        Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[2,3,4],dtype=str)
+        Discmini_data = np.char.replace(Discmini_data, ',', '.').astype(float)
     except:
-        Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%m-%Y %H:%M:%S")
-                                      for i in Discmini_time])
+        try:
+            Discmini_time = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=0,dtype=str)
+            Discmini_datetimes = np.array([datetime.datetime.strptime(i, "%d-%m-%Y %H:%M:%S")
+                                          for i in Discmini_time])
+            Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[2,3,4],dtype=str)
+            Discmini_data = np.char.replace(Discmini_data, ',', '.').astype(float)
+        except:
+            try:
+                Discmini_data = np.genfromtxt(file,delimiter="\t",skip_header=6,usecols=[1,2,3],dtype=str)
+                Discmini_data = np.char.replace(Discmini_data, ',', '.').astype(float)
+                
+                # Read the starting time from the partector file
+                tst=np.genfromtxt(file,delimiter="\t",usecols=[0],dtype=str)
+                #Locate and strip the starting date from string
+                Date = datetime.datetime.strptime(tst[2].split("start date: ")[1].split("]")[0],"%Y.%m.%d")
+                #Locate and strip the starting time from string
+                Time = datetime.datetime.strptime(tst[3].split("start time: ")[1].split("]")[0],"%H:%M:%S")
+                Time=Time.hour*3600 + Time.minute*60 + Time.second
+                Start_time = Date+datetime.timedelta(0,Time)
+                
+                #Generate time array based on one second per measurement
+                Discmini_datetimes=[]   
+                for idx in range(0,len(Discmini_data)):
+                    Discmini_datetimes.append(Start_time+datetime.timedelta(0,idx))
+            except Exception as e:
+                print(e)
+                print("Time format not covered by the function!?")
+                return
+    
     # Select data within specified time interval if specified
     if (start != 0) or (end != 0):
         if (start != 0) & (end == 0):

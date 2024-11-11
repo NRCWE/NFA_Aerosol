@@ -32,7 +32,7 @@ plt.rcParams.update(params)
 ###############################################################################
 ###############################################################################
   
-def Boxplot_PM(data_in,labels,y_lim=(0,0),tick_dist = 5):
+def Boxplot_PM(data_in,labels,y_lim=(0,0),tick_dist = 5,ax_in=None):
     """
     Function to genereate a boxplot of PM levels from an array returned by the
     PM_calc function.
@@ -51,6 +51,10 @@ def Boxplot_PM(data_in,labels,y_lim=(0,0),tick_dist = 5):
         the max of the dataset e.g. (0,xx) will plot from lowest datapoint to xx.
     tick_dist : int
         Distance between the ticks on the y-axis. Default is 5.
+    ax_in : matplotlib.axes._axes.Axes
+        If an axis is given, then the plot will be made using that handle, rather
+        than generating a new figure. This is relevant in cases where subplots
+        are being used.
 
     Returns
     -------
@@ -60,8 +64,12 @@ def Boxplot_PM(data_in,labels,y_lim=(0,0),tick_dist = 5):
         Handle for the axis object of the plot.
 
     """
+    if ax_in == None:
+        fig, ax = plt.subplots()
+    else:
+        ax = ax_in
     data = data_in[:,1:]
-    fig, ax = plt.subplots()
+    
     
     dat_min = data.min()
     dat_max = data.max()
@@ -79,7 +87,7 @@ def Boxplot_PM(data_in,labels,y_lim=(0,0),tick_dist = 5):
     ax.grid(which="both",axis="both")
     ax.set_ylabel("Mass concentration, $\mu$g/cm$^{3}$")
     
-    return fig, ax
+    return ax.figure,ax
 
 ###############################################################################
 ###############################################################################
@@ -230,7 +238,7 @@ def Direct_compare(data_in1,data_in2, bin_edges):
 ###############################################################################
 ###############################################################################
 
-def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
+def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True):
     """
     Function to plot the correlation between two sets of values, which have been
     aligned so as to have sensible comparison points. 
@@ -243,7 +251,7 @@ def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
         First set of values. 
     Y: Numpy.array
         Second set of values.  
-    ax : matplotlib.axes._subplots.AxesSubplot
+    ax_in : matplotlib.axes._subplots.AxesSubplot
         Handles for the axis of the plot.
         Usefull for plotting multiple correlations in the same figure.
         
@@ -335,8 +343,10 @@ def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
     fit_y=fit_x*A+B/factor
 
     #If no ax is provided, figure and ax is generated here
-    if ax==False:
+    if ax_in==False:
         figure, ax = plt.subplots()
+    else:
+        ax = ax_in
     #Plot the 1:1 line
     ax.plot([x_min,x_max],[x_min,x_max],'k:',label='1:1',lw=3)
     #Plot the fit with associated uncertainty
@@ -360,7 +370,7 @@ def Plot_correlation(X, Y, ax=False, intercept=True, uniform_scaling=True):
 ###############################################################################
 ###############################################################################
 
-def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number"):
+def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlog=True, y_lim=(0, 0), datatype="number", ax_in=None):
     """
     Similar to Plot_PSD only this function can plot the PSDs for multiple instruments
     that have different bin mids. 
@@ -398,7 +408,11 @@ def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlo
     if colors==None:
         colors = ["red", "blue", "green", "orange", "magenta", "cyan", "k", "purple", "yellow", 'pink']
     #dlinestyles='-'
-    fig, ax = plt.subplots()
+    if ax_in == None:
+        fig, ax = plt.subplots()
+    else:
+        ax = ax_in
+        
     for idx, (bin_mids, dataset) in enumerate(data_in):
         #Checking whether the data format is as the data returned from a load function
         if len(dataset[0,:])==len(bin_mids)+2:
@@ -409,7 +423,7 @@ def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlo
         #If the data fits neither array width it returns an error message.
         else: return print("Error: Issue with size of bin_mids and data")
         
-        mean_psd = particle_data.mean(axis=0)
+        mean_psd = np.nanmean(particle_data,axis=0)
         
         #runs through the supplied or default colors, labels and linestyles to correctly add it to the plot
         color = colors[idx % len(colors)]
@@ -420,7 +434,7 @@ def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlo
         
         #confirms that there is sufficent data to make standard error plot
         if len(particle_data[:,0])>1:
-            sem_psd = sem(particle_data, axis=0)
+            sem_psd = sem(particle_data, axis=0,nan_policy="omit")
             ax.fill_between(bin_mids, mean_psd - sem_psd, mean_psd + sem_psd, alpha=0.5, color=color)
 
     # Set axis scales and labels
@@ -441,9 +455,9 @@ def Plot_PSD(*data_in, labels=None, colors=None, linestyles=None, ylog=True, xlo
 
     if labels:
         ax.legend()
-
-    return fig, ax
-
+    
+    return ax.figure, ax
+    
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -1076,99 +1090,6 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
     
     return fig, ax
 
-###############################################################################
-###############################################################################
-###############################################################################
-
-def transfer_ax_elements(src_ax, dest_ax, is_shared_x=False):
-    """
-    Function to transfer relevant plot elements from one axes object to another
-    in order to "move" a plot from one figure to another. This is relevant, if
-    a plot was generated with one of the plotting functions and is to be 
-    combined with other plots in a new subplot collection. The is_shared_x 
-    variable can be set to True, if the copied plot previously shared its x-axis
-    with another plot, meaning that it does not have any xticks and xticklabels.
-
-    Parameters
-    ----------
-    src_ax : matplotlib.axes._axes.Axes
-        Source axis handle from which elements will be copied.
-    dest_ax : matplotlib.axes._axes.Axes
-        Destination axis handle to where elements will be copied.
-    is_shared_x : boolean, optional
-        Can be set to True, if the copied plot previously shared its x-axis with 
-        another plot, meaning that it does not have any xticks and xticklabels. 
-        The default is False.
-
-    Returns
-    -------
-    None, as elements are added directly to the new axis object.
-
-    """
-    
-    # Copy lines (plots) by replotting data
-    for line in src_ax.get_lines():
-        dest_ax.plot(line.get_xdata(), line.get_ydata(), label=line.get_label())
-    
-    # Copy scatter plots or other markers (collections) by replotting
-    for collection in src_ax.collections:
-        if isinstance(collection, LineCollection):  # Handle line collections
-            dest_ax.add_collection(collection)
-        elif isinstance(collection, PathCollection):  # Handle scatter plots
-            dest_ax.scatter(collection.get_offsets()[:, 0], collection.get_offsets()[:, 1], **collection.get_edgecolor())
-
-    # Copy vertical/horizontal lines (axvline, axhline) with try-except to handle missing lines
-    try:
-        for axvline in src_ax.get_vlines():
-            dest_ax.axvline(x=axvline.get_xdata()[0], ymin=axvline.get_ydata()[0], ymax=axvline.get_ydata()[1])
-    except AttributeError:
-        pass  # No vertical lines exist, just pass
-    
-    try:
-        for axhline in src_ax.get_hlines():
-            dest_ax.axhline(y=axhline.get_ydata()[0], xmin=axhline.get_xdata()[0], xmax=axhline.get_xdata()[1])
-    except AttributeError:
-        pass  # No horizontal lines exist, just pass
-
-    # Copy text annotations
-    for annot in src_ax.texts:
-        dest_ax.text(annot.get_position()[0], annot.get_position()[1], annot.get_text(), **annot.get_fontproperties())
-    
-    # Copy titles, labels, and grid state
-    dest_ax.set_title(src_ax.get_title())
-    dest_ax.set_xlabel(src_ax.get_xlabel())
-    dest_ax.set_ylabel(src_ax.get_ylabel())
-    dest_ax.grid(src_ax._axisbelow)  # Copy grid state
-    
-    # Copy legends if they exist
-    if src_ax.get_legend():
-        dest_ax.legend()
-
-    # Handle x-ticks and labels
-    if not is_shared_x:
-        dest_ax.set_xticks(src_ax.get_xticks())
-        dest_ax.set_xticklabels(src_ax.get_xticklabels())
-    else:
-        # If shared, ensure the ticks follow the main shared axis
-        shared_ax = src_ax.get_shared_x_axes().get_siblings(src_ax)[0] if src_ax.get_shared_x_axes() else None
-        if shared_ax:
-            dest_ax.set_xticks(shared_ax.get_xticks())
-            dest_ax.set_xticklabels(shared_ax.get_xticklabels())
-
-    # Copy y-ticks and labels
-    dest_ax.set_yticks(src_ax.get_yticks())
-    dest_ax.set_yticklabels(src_ax.get_yticklabels())
-
-    # Check if the source axes are using log scale, and apply to destination axes if so
-    if src_ax.get_xscale() == 'log':
-        dest_ax.set_xscale('log')
-    if src_ax.get_yscale() == 'log':
-        dest_ax.set_yscale('log')
-
-    # Handle shared x-axis case
-    if is_shared_x and src_ax.get_shared_x_axes():
-        src_ax.get_shared_x_axes().remove(src_ax)
-        
 ###############################################################################
 ###############################################################################
 ###############################################################################

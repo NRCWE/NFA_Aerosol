@@ -79,15 +79,30 @@ def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
     
     # Grab the OPS data within the specifed start and end times
     OPS_time_matched = data_OPS[(data_OPS[:,0]>=starttime) & (data_OPS[:,0]<=endtime)]
-        
+    
+    # Drop the total concentration column of the OPS data, as it is recalculated after combining with NS
+    OPS_time_matched = np.delete(OPS_time_matched, 1, 1)
+    
     # the penultimate NS sizebin has its upper limit reduced from 319.5 to 300, 
     # so the particle number is corrected accordingly
     Factor_reduction = (300-239.6)/(319.5-239.6) 
     New_concentration = NS_time_matched[:,-2].astype("float")*Factor_reduction
     NS_time_matched[:,-2] = New_concentration
     
+    DF_NS = pd.DataFrame(NS_time_matched[:,:-1])
+    DF_NS[0] = pd.to_datetime(DF_NS[0])
+    
+    DF_OPS = pd.DataFrame(OPS_time_matched)
+    DF_OPS[0] = pd.to_datetime(DF_OPS[0])
+
+    # Merge on 'datetime' column, using an outer join to keep all datetime values
+    merged_df = pd.merge(DF_NS, DF_OPS, on=0, how='outer')
+
+    # Sort by datetime (optional)
+    merged_df = merged_df.sort_values(by=0).reset_index(drop=True)
+
     # The OPS and NS data are combined, but excluding the final bin of the NS
-    Combined_NS_OPS = np.concatenate((NS_time_matched[:,:-1], OPS_time_matched[:,2:]),axis=1)
+    Combined_NS_OPS = merged_df.to_numpy()
     
     # A new total concentration is calculated based on the combined size bin data
     Combined_NS_OPS[:,1] = np.round(Combined_NS_OPS[:,2:].sum(axis=1).astype("float"),0)
@@ -95,16 +110,19 @@ def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
     # As it is assumed that the standard bins are used for both the NS and OPS, the new bins will always be:
     if OPS_bin==[]:
         New_bin_edges = [  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
-           101.05, 134.75, 179.7 , 239.6, 300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
-            1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.]
+        101.05, 134.75, 179.7 , 239.6, 300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
+        1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.])
     else:
-        
         New_bin_edges = [  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
-       101.05, 134.75, 179.7 , 239.6]
+        101.05, 134.75, 179.7 , 239.6]
         for i in OPS_bin:
             New_bin_edges.append(i)
         
-    return Combined_NS_OPS, np.array(New_bin_edges)
+    New_bin_edges = np.array(New_bin_edges)
+    New_bin_mids = New_bin_edges[:-1]+(New_bin_edges[1:]-New_bin_edges[:-1])/2
+    Header = ["Datetime","Total"] + list(New_bin_mids)
+    
+    return Combined_NS_OPS, New_bin_edges, Header
 
 ###############################################################################
 ###############################################################################
@@ -1355,7 +1373,7 @@ def Save_plot(figure,filename,path,extension=".png"):
 ###############################################################################
 ###############################################################################
 
-def segment_dataset(data_in,segments):
+def segment_dataset(data_in,segments,labels=None):
     """
     Function to segment a dataset into different activities e.g. background and
     different workplace processes. Each activity can have multiple time 
@@ -1398,7 +1416,10 @@ def segment_dataset(data_in,segments):
     """
     
     # Generate an array of zeros for indexing
-    index = np.zeros(data_in.shape[0])
+    index = np.zeros(data_in.shape[0],dtype="O")
+    
+    if not labels:
+        labels = range(1,len(segments)+1)
     
     # Loop through the different time segments
     for j,i in enumerate(segments):
@@ -1410,8 +1431,8 @@ def segment_dataset(data_in,segments):
             
             # Find the indexes, where the experiment time is between the specified
             # start and end time and give these indexes a value of j+1
-            index[(data_in[:,0]>start) & (data_in[:,0]<end)] = j+1
-        
+            index[(data_in[:,0]>start) & (data_in[:,0]<end)] = labels[j]
+            
         # If there is more than one time segment for the given activity
         else:
             # store all starting points in one and end points in another variable
@@ -1422,8 +1443,8 @@ def segment_dataset(data_in,segments):
             # experiment time is between the specified start and end times and 
             # set these indexes to j+1
             for k in range(len(starts)):
-                index[(data_in[:,0]>=starts[k]) & (data_in[:,0]<=ends[k])] = j+1
-    
+                index[(data_in[:,0]>=starts[k]) & (data_in[:,0]<=ends[k])] = labels[j]
+            
     return index
 
 ###############################################################################
