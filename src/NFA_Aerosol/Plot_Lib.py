@@ -558,7 +558,7 @@ def Plot_time_segments(data_in,ix,labels,elapsed=0,ylog=1):
 ###############################################################################
 ###############################################################################
 
-def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, log = 1, datatype = "number"):
+def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, log = 1,log_3d=1, datatype = "number",normal=True):
     """
     Function to plot both the total number number concentration and the number 
     concentrations measured in individual sizebins as a colored mesh plot.
@@ -578,7 +578,8 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
     y_3d : tuple, optional
         Lower and upper limit on the colorbar of the 3d timeseris plot
         given as (lower,upper). 
-        The default is (0,0) in which case it will select a value automatically.
+        The default is (1,0) in which case it will select a max value automatically, while
+        ensuring a lower limit of 1.
     elapsed : boolean, optional
         Flag to set time as elapsed time rather than local time. Set to 1 to
         switch to elapsed time. The default is 0.
@@ -589,7 +590,9 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
         Keyword to specify the datatype. The available options are "number",
         "normed" and "mass". Here "normed" refers to dN/dlogDp. Default is 
         "number"
-
+    normal:
+        Determines whether the data has been normalized. If it hasn't ' a normalization is done.
+        
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -599,10 +602,15 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
 
     """
     
+    
+    
     time = data_in[:,0]
     total = data_in[:,1].astype('float64')
     data = data_in[:,2:].astype('float64')
     
+    if normal==False:
+        dlogDp = np.log10(bin_edges[1:])-np.log10(bin_edges[:-1])
+        data=data/dlogDp
     # Generate canvas and axis
     fig, axs = plt.subplots(nrows=2,ncols=1, sharex=True)
     ax1,ax2 = axs
@@ -631,15 +639,12 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
             ax1.set_ylim(y_tot[0],tot_max*1.02)
         else:
             ax1.set_ylim(y_tot[0],y_tot[1])
-    ax1.set_yscale("log")
-    if datatype == "number":
-        ax1.set_ylabel("N$_{Total}$, cm$^{-3}$")
-    elif datatype == "mass":
-        ax1.set_ylabel("m$_{Total}$, $\mu$g/m$^{3}$")
-    elif datatype == "normed":
-        ax1.set_ylabel("dN/dlogDp, cm$^{-3}$")
+            
+    if log==1:
+        ax1.set_yscale("log")
+
     ax1.set_xlabel("")
-    
+
     # Generate an extra time bin, which is needed for the meshgrid
     dt = time[1]-time[0]
     time = time - dt
@@ -664,9 +669,22 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
     else:
         y_3d_min = np.nanmin(data)
         y_3d_max = np.nanmax(data)
-        
+    
+    
     # Fill the generated mesh with particle concentration data
-    if log:
+    
+    # Set datapoints smaller than 1 equal to 1 in order to avoid issues when 
+    # plotting log transformed values
+    if np.all(data):
+        print("No zeros, continuing")
+    else:
+        print("""There is a 0 value in the dataset, meaning that log plotting is not possible.\nEither specify a lower limit or turn off log y-scale""")
+        return [], []
+    
+    # Make the colormesh plot
+    # c = ax2.pcolormesh(x, y, data, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
+    
+    if log_3d:
         # Set datapoints smaller than 1 equal to 1 in order to avoid issues when 
         # plotting log transformed values
         if np.all(data):
@@ -677,6 +695,7 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
         
         # Make the colormesh plot
         c = ax2.pcolormesh(x, y, data, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
+        
         # Set y-axis to log scale
         ax2.set_yscale("log")
     else:
@@ -687,18 +706,11 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
         ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d - %H:%M"))
         ax2.set_xlabel("Time, DD - HH:MM")
         ax2.xaxis.labelpad = 20
-        plt.xticks(rotation=-45, ha="left")
+        ax2.set_xticklabels(ax2.get_xticklabels(), rotation=-45, ha="left")
         plt.subplots_adjust(hspace=0.05,bottom = 0.25)
     else:
-        if (time[-1]-time[0]) > datetime.timedelta(days=1):
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d - %H:%M"))
-            ax2.set_xlabel("Time, DD - HH:MM")
-            ax2.xaxis.labelpad = 20
-            plt.xticks(rotation=-45, ha="left")
-            plt.subplots_adjust(hspace=0.05,bottom = 0.25)
-        else:
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-            ax2.set_xlabel("Time, HH:MM")
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax2.set_xlabel("Time, HH:MM")
         plt.subplots_adjust(hspace=0.05)
         
     # Make the y-scal logarithmic and set a label
@@ -707,13 +719,17 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
     
     # Insert coloarbar and label it
     col = fig.colorbar(c, ax=axs)
+
     if datatype == "number":
-        col.set_label('dN, cm$^{-3}$')
-    elif datatype == "mass":
-        col.set_label('dm, $\mu$g/m$^{3}$')
-    elif datatype == "normed":
+        ax1.set_ylabel("N$_{Total}$, cm$^{-3}$")
         col.set_label('dN/dlogDp, cm$^{-3}$')
-    
+    elif datatype == 'surface':
+        ax1.set_ylabel("S$_{Total}$, nm$^{2}$ cm$^{-3}$")
+        col.set_label('dS/dlogDp, nm$^{2}$ cm$^{-3}$')
+    elif datatype == "mass":
+        ax1.set_ylabel("m$_{Total}$, $\mu$g/m$^{3}$")
+        col.set_label('dm/dlogDp, $\mu$g/m$^{3}$')
+
     # Set ticks on the plot to be longer
     ax1.tick_params(axis="y",which="both",direction='out', length=6, width=2)
     ax2.tick_params(axis="y",which="both",direction='out', length=6, width=2)
@@ -722,6 +738,7 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
     axs = np.append(axs,col)
     
     return fig,axs
+
 
 ###############################################################################
 ###############################################################################
