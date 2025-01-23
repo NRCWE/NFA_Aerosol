@@ -677,7 +677,6 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
         
         # Make the colormesh plot
         c = ax2.pcolormesh(x, y, data, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
-        
         # Set y-axis to log scale
         ax2.set_yscale("log")
     else:
@@ -688,11 +687,18 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(0,0), elapsed = 0, lo
         ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d - %H:%M"))
         ax2.set_xlabel("Time, DD - HH:MM")
         ax2.xaxis.labelpad = 20
-        ax2.set_xticklabels(ax2.get_xticklabels(), rotation=-45, ha="left")
+        plt.xticks(rotation=-45, ha="left")
         plt.subplots_adjust(hspace=0.05,bottom = 0.25)
     else:
-        ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-        ax2.set_xlabel("Time, HH:MM")
+        if (time[-1]-time[0]) > datetime.timedelta(days=1):
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d - %H:%M"))
+            ax2.set_xlabel("Time, DD - HH:MM")
+            ax2.xaxis.labelpad = 20
+            plt.xticks(rotation=-45, ha="left")
+            plt.subplots_adjust(hspace=0.05,bottom = 0.25)
+        else:
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+            ax2.set_xlabel("Time, HH:MM")
         plt.subplots_adjust(hspace=0.05)
         
     # Make the y-scal logarithmic and set a label

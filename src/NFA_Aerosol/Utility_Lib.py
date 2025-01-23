@@ -54,6 +54,8 @@ def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
         to last has been shortened and its number reduced accordingly.
     New_bin_edges : numpy.array
         Array of new size bin edges in nm.
+    Header : list
+        Header of all data columns
 
     """
     # Round all the datetime values, so they do not have seconds, in order to ease the alignment process
@@ -82,7 +84,7 @@ def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
     
     # Drop the total concentration column of the OPS data, as it is recalculated after combining with NS
     OPS_time_matched = np.delete(OPS_time_matched, 1, 1)
-    
+   
     # the penultimate NS sizebin has its upper limit reduced from 319.5 to 300, 
     # so the particle number is corrected accordingly
     Factor_reduction = (300-239.6)/(319.5-239.6) 
@@ -94,13 +96,13 @@ def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
     
     DF_OPS = pd.DataFrame(OPS_time_matched)
     DF_OPS[0] = pd.to_datetime(DF_OPS[0])
-
+    
     # Merge on 'datetime' column, using an outer join to keep all datetime values
     merged_df = pd.merge(DF_NS, DF_OPS, on=0, how='outer')
 
     # Sort by datetime (optional)
     merged_df = merged_df.sort_values(by=0).reset_index(drop=True)
-
+    
     # The OPS and NS data are combined, but excluding the final bin of the NS
     Combined_NS_OPS = merged_df.to_numpy()
     
@@ -111,7 +113,7 @@ def Combine_NS_OPS(data_NS,data_OPS,OPS_bin=[],starttime=None,endtime=None):
     if OPS_bin==[]:
         New_bin_edges = [  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
         101.05, 134.75, 179.7 , 239.6, 300.,   374.,   465.,   579.,   721.,   897.,  1117.,  1391.,
-        1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.])
+        1732.,  2156.,  2685.,  3343.,  4162.,  5182.,  6451.,  8031., 10000.]
     else:
         New_bin_edges = [  10.  ,  13.45,  17.95,  23.95,  31.95,  42.6 ,  56.8 ,  75.75,
         101.05, 134.75, 179.7 , 239.6]
@@ -239,7 +241,7 @@ def Diffusion_loss(Data_in, bin_mids, D_tube, L, Q, T = 293, P = 101.3e3):
 ###############################################################################
 ###############################################################################
 
-def File_list(path, search = 0):
+def File_list(path, search = 0,max_subfolder=0,nested_list=0):
     """
     Function to generate a list of all files in a folder. If the search 
     parameter is set to a string, only files containing the string keyword are 
@@ -252,6 +254,16 @@ def File_list(path, search = 0):
     search : str, optional
         A string keyword so that only files with the keyword in their name will
         be included in the returned list. The default is 0.
+    max_subfolder : int
+        Specifies the depth/number of subfolders to traverse. If set to e.g. 2, 
+        the function will include subfolders of subfolders compared to the 
+        original directory path. The default is 0.
+    nested_list : Boolean
+        If set to true, the function will return a list of lists, where each
+        sublist contains the files of a given subfolder. This can be relevant
+        if files from each subfolder should not be mixed, allowing the user
+        to loop through each list of lists. If false, the function returns a
+        list of filenames without any division between them. The defauls is 0.        
 
     Returns
     -------
@@ -260,14 +272,39 @@ def File_list(path, search = 0):
         specified keyword if defined.
 
     """
-    # If a keyword is specified include it in the list criteria
+    # Make a list to hold the file names
+    files = []
+    
+    # Walk through the directories of the initial path
+    root_depth = path.rstrip(os.sep).count(os.sep)
+    
+    for root, _, filenames in os.walk(path):
+        current_depth = root.count(os.sep)
+        if current_depth-root_depth > max_subfolder:
+            continue
+        else:
+            # If specified to use nested lists, join all files from subfolders within a list of lists
+            if nested_list:
+                files.append([os.path.join(root,file) for file in filenames])
+            # Otherwise, run through all file names seperately
+            else:
+                for f in filenames:
+                    files.append(os.path.join(root, f))
+                    
+    # Check if a specific keyword is needed within the file names
     if search:
-        files = [x for x in os.listdir(path) if "{0}".format(search) in x]
-    # If no keyword is specified, just list all files in the path
+        final_list = []
+        # Run through all filenames (or list of filenames if nested lists are used)
+        for item in files:
+            if isinstance(item, list):  # Check if the item is a sublist
+                final_list.append([file for file in item if search in file]) # remove items without the keyword
+            else:
+                if search in item: # check if the keyword (search) is within the filename (item)
+                    final_list.append(item)
+        final_list = [sublist for sublist in final_list if sublist] # remove empty lists
     else:
-        files = [x for x in os.listdir(path)]
-    files = [path + "\\" + i for i in files]
-    return files
+        final_list = files
+    return final_list
 
 ###############################################################################
 ###############################################################################
@@ -889,8 +926,8 @@ def num2mass(data_in, bin_mids, density=1.0, unit="mg", ICRP='none'):
         An array of data as returned by the Load_xxx functions with columns
         of datetime, total conc, and size bin data. The unit should be #/cm3
     bin_mids : numpy.array
-        Array containing the mid-points of all sizebins. The array should have 
-        the same number of bins as the "data_in" parameter
+        Array containing the mid-points in nm of all sizebins. The array should have 
+        the same number of bins as the "data_in" parameter.
     density : float/list, optinonal
         A density can be specified, either as a uniform single value, or as a list
         with length equal to the number of bins. The unit should be g/cm3.
