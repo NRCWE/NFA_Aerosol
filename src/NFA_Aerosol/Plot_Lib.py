@@ -19,6 +19,7 @@ import matplotlib.ticker as ticker
 from scipy.stats import sem, theilslopes
 from scipy.optimize import curve_fit
 import datetime as datetime
+import Utility_Lib as UL
 
 params = {'legend.fontsize': 20,
          'axes.labelsize': 25,
@@ -92,7 +93,6 @@ def Boxplot_PM(data_in,labels,y_lim=(0,0),tick_dist = 5,ax_in=None):
 ###############################################################################
 ###############################################################################
 ###############################################################################
-
 
 def Direct_compare(data_in1,data_in2, bin_edges):
     """
@@ -236,6 +236,118 @@ def Direct_compare(data_in1,data_in2, bin_edges):
 
 ###############################################################################
 ###############################################################################
+def Plot_APS_correlation(data,y_3d=(1E-3,0),log_3d=1,ax_in=None):
+    """
+    Plot for returning the correlated plot between aerodynamic and optical 
+    size distribution for the APS.
+    The data can be loaded with either a single set of data or a timeseries,
+    in which case the average will be plotted.
+
+    Parameters
+    ----------
+    data : np.array
+        Array as returned by the IL.Load_APS_full function set to correlation.
+        The array can either be a single time instance as [time,total,cor_array]
+        or as the extracted cor_array, or it can span time by returning the average
+        cor_array over the inserted time period.
+    y_3d : tuple, optional
+        Lower and upper limit on the colorbar of the 3d timeseris plot
+        given as (lower,upper). 
+        The default is (1E-3,0) in which case it will select a max value automatically, while
+        ensuring a lower limit of 1E-3.
+    log_3d : boolean, optional
+        Flag to set whether to use log-scale on the 3D mesh colorbar scale. 
+        Default is on
+    ax_in : matplotlib.axes._axes.Axes
+        If an axis is given, then the plot will be made using that handle, rather
+        than generating a new figure. This is relevant in cases where subplots
+        are being used.
+        
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Handle for the returned figure for saving.
+    ax : matplotlib.axes._subplots.AxesSubplot
+        Handle for the axis object of the plot.
+
+    """
+    
+    #Bin_edges for Optic and Aerodynamic bins
+    Optic_bins=[370,475.58,611.28,785.7,1009.89,1298.06,1668.44,2144.52,2756.44,3542.96,
+                4553.91,5853.33,7523.53,9670.3,12429.6,15976.3,20535]
+    Aero_bins=[523,568,604.5,649.5,698,750,806,866.5,931.5,1001,1075.5,1155.5,1241.5,
+               1334,1434,1541,1655.5,1779,1912,2055,2208.5,2373,2550,2740.5,2945,
+               3164.5,3400.5,3654.5,3927,4219.5,4534.5,4873,5236.5,5627,6046.5,
+               6498,6983,7504,8064,8665.5,9312,10008.5,10755,11555,12415,
+               13340,14340,15410,16555,17790,19120,20535]
+
+    #Determines the shape of the data returned
+    if len(data.shape)==1:
+        Data=data[2].copy()
+    #If the data spans multiple rows of times, the average will be plotted.
+    elif data.shape[1]==3:
+        #If the data is 
+        Data=data[0,2].copy()
+        for A in range(0,len(data[0,2][0,:])):
+            for O in range(0,len(data[0,2][:,0])):
+                avg=[]
+                for t in range(0,len(data)):
+                    avg=np.append(avg,data[t,2][O,A])
+                Data[O,A]=np.mean(avg)
+    elif data.shape[1]==52:
+        Data=data.copy()
+        
+    # Set the upper and/or lower limit of the color scale based on input
+    if (y_3d[0] == 0) & (y_3d[1] != 0):
+        y_3d_min = np.nanmin(Data)
+        y_3d_max = y_3d[1]
+        
+    elif (y_3d[0] != 0) & (y_3d[1] == 0):
+        y_3d_min = y_3d[0]
+        y_3d_max = np.nanmax(Data)
+        Data[Data<y_3d[0]]= y_3d[0]   
+    elif (y_3d[0] != 0) or (y_3d[1] != 0):
+        y_3d_min = y_3d[0]
+        y_3d_max = y_3d[1]
+        Data[Data<y_3d[0]]= y_3d[0]
+    else:
+        y_3d_min = np.nanmin(Data)
+        y_3d_max = np.nanmax(Data)
+        
+    #Plot colormesh of peak
+    if ax_in == None:
+        fig, ax = plt.subplots()
+    else:
+        ax = ax_in
+    
+    if log_3d:
+        # Set datapoints smaller than 1 equal to 1 in order to avoid issues when 
+        # plotting log transformed values
+        if np.all(Data):
+            print("No zeros, continuing")
+        else:
+            print("""There is a 0 value in the dataset, meaning that log plotting is not possible.\nEither specify a lower limit or turn off log y-scale""")
+            return [], []
+        
+        # Make the colormesh plot
+        c = ax.pcolormesh(Aero_bins,Optic_bins, Data, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
+        
+    else:
+        c = ax.pcolormesh(Aero_bins,Optic_bins, Data, cmap='jet',vmin=y_3d_min, vmax=y_3d_max,shading='flat')
+    
+    #Plot the location of the points of interest 
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel('Optic Dp (nm)')
+    ax.set_xlabel('Aerodynamic Dp (nm)')
+    col = fig.colorbar(c)
+    col.set_label('dN, cm$^{-3}$')
+    fig.set_size_inches(15, 15)
+    plt.show()
+    if ax_in == None:
+        return fig, ax
+    else:
+        return ax.fig, ax
 ###############################################################################
 
 def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True, outlier_influence=True):
@@ -274,7 +386,7 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True, ou
                     if j==len(instruments)-2:
                         axes[j, i].set_xlabel(instruments[i])
          '''                 
-    unifomr_scaling: boolean, optional
+    uniform_scaling: boolean, optional
         Boolean that can be turned off so as to not scale axis the max value.
         
     Returns
@@ -301,6 +413,7 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True, ou
     #Cleaning up the data and removing rows where either value is nan
     z=np.column_stack((X.copy(),Y.copy())).astype('float64')
     z=z[~np.isnan(z).any(axis=1)]
+    z=z[~np.isinf(z).any(axis=1)]
     x=z[:,0]
     y=z[:,1]
     
@@ -345,7 +458,13 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True, ou
     
     fit_x=np.linspace(x_min,x_max,20)
     fit_y=fit_x*A+B/factor
-
+    if B==0:
+        label=f"y={round(A,2)}$\cdot$x"#"y={:.2f}$\cdot$x+{:.2f}, R$^2$={:.2f}"
+    elif B>0:
+        label=f"y={round(A,2)}$\cdot$x \n + {round(B,2)}"#"y={:.2f}$\cdot$x+{:.2f}, R$^2$={:.2f}"
+        
+    else:
+        label=f"y={round(A,2)}$\cdot$x \n {round(B,2)}"#"y={:.2f}$\cdot$x+{:.2f}, R$^2$={
     #If no ax is provided, figure and ax is generated here
     if ax_in==False:
         figure, ax = plt.subplots()
@@ -356,13 +475,310 @@ def Plot_correlation(X, Y, ax_in=False, intercept=True, uniform_scaling=True, ou
     else:
         ax = ax_in
     #Plot the 1:1 line
-    ax.plot([x_min,x_max],[x_min,x_max],ls="--",c="k",label='1:1 Line',lw=3)
+    ax.plot([x_min,x_max],[x_min,x_max],ls="--",c="k",lw=3)
     #Plot the data with scatter plot
     ax.plot(x/factor,y/factor,'bo')
     #Plot the fit with associated uncertainty
-    ax.plot(fit_x, fit_y, 'r-',lw=3, label="y={:.2f}$\cdot$x+{:.2f}, R$^2$={:.2f}".format(A, B, r2))
+    ax.plot(fit_x, fit_y, 'r-',lw=3)#, label=label.format(A, B, r2))
+    ax.text(0.05, 0.95, label, transform=ax.transAxes, fontsize=25,
+        verticalalignment='top')
+    if B==0:
+        ax.text(0.05, 0.80, f"r$^2$: {round(r2,2)}", transform=ax.transAxes, fontsize=25,
+        verticalalignment='top')
+    else:
+        ax.text(0.05, 0.65, f"r$^2$: {round(r2,2)}", transform=ax.transAxes, fontsize=25,
+        verticalalignment='top')
+        
     if outlier_influence:
         ax.fill_between(fit_x, fit_y - ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, fit_y + ((SE_A*fit_x)**2+(SE_B/factor)**2)**0.5, alpha=0.33)
+    return ax.figure,ax
+
+###############################################################################
+def Plot_correlation_df(df, fig_text="", *Plotsettings):
+    """
+    Function to plot multiple correlation plots together in a n*n grid, where n is the number of instruments minus 1.
+    X and Y must have the same length. This can be accomplished by using the
+    averaging function to generate time associated data of same dimensions. 
+       
+    Parameters
+    ----------
+    df: dataframe
+        dataframe of the instruments structured with an instrument per column,
+        with instrument handle equal to 
+        
+    fig_text: str, optional
+        Second set of values.  
+        
+    *Plotsettings: list of input to 
+        Input to the Plot_calibration function:
+            intercept=True, uniform_scaling=True, outlier_influence=True
+        Call on this
+    unifomr_scaling: boolean, optional
+        Boolean that can be turned off so as to not scale axis the max value.
+        
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Handle for the returned figure for saving.
+    gs : matplotlib.gridspace._subplots.AxesSubplot
+        Handles for the gridspace of the plot.
+        """
+        
+    instruments = list(df.columns)
+    n=0
+    
+    if len(instruments)==2:
+        fig, ax= Plot_correlation(df[instruments[0]], df[instruments[1]], *Plotsettings)#
+        fig.figsize=(18, 18)
+        ax.set_ylabel(instruments[1])
+        ax.set_xlabel(instruments[0])
+    else:
+        n = len(instruments) - 1
+        
+        fig = plt.figure(figsize=(18, 18), constrained_layout=True)
+        gs = fig.add_gridspec(n, n)
+        
+        axes = {}
+        # Create only the subplots you need (upper triangle incl. diagonal)
+        for i in range(n):
+            for j in range(i, n):
+                ax = fig.add_subplot(gs[j, i])    # row=j, col=i
+                axes[(j, i)] = ax
+        
+                # Your custom correlation plot
+                try:
+                    _, _ = Plot_correlation(df[instruments[i]], df[instruments[j+1]], ax, *Plotsettings)#intercept=intercept)
+                except Exception:
+                    pass
+        
+                if i == 0:
+                    ax.set_ylabel(instruments[j+1])
+                if j == n - 1:
+                    ax.set_xlabel(instruments[i])
+    if len(fig_text)>0:
+        # One description box spanning top row, columns 2..n (i.e., gs[0, 1:])
+        if n > 1:
+            desc_ax = fig.add_subplot(gs[0, 1:])  # uses only empty cells
+            desc_ax.axis('off')
+            desc_ax.text(
+                0.0, 0.5,
+                fig_text,
+                ha='left', va='center', fontsize=40, wrap=True,
+                bbox=dict(boxstyle="round,pad=0.6", fc="whitesmoke", ec="0.5", lw=1),
+                transform=desc_ax.transAxes
+            )
+        else:
+            # Fallback if there's only one column in the grid
+            ax.text(
+                0.5, 0.90,
+                fig_text,
+                ha='center', va='top',transform=ax.transAxes, fontsize=40
+            )
+    plt.tight_layout()
+    if n==0:
+        return fig, ax
+    else:
+        return fig, gs
+
+###############################################################################
+def rounder(mean,sem):
+    try:
+        # sem=Sem
+        # mean=Mean
+        Multiplier=0
+        if sem>10:
+            while sem>10:
+                Multiplier+=1
+                sem/=10
+                mean/=10
+        elif sem<1:
+            while sem<1:
+                Multiplier-=1
+                sem*=10
+                mean*=10
+    
+        if str(sem)[0]=='1':
+            floater=3
+            rounder=1
+        else:
+            floater=1
+            rounder=0
+    
+        sem=str(round(sem,rounder))[:1+floater]
+        mean=str(round(mean,rounder))
+        for i in range(0,len(mean)):
+            if mean[i]=='.':
+                break
+        mean=mean[:i+floater]
+        
+        if (Multiplier<3) & (Multiplier>=-2):
+            mean=str(float(mean)*10**(Multiplier))
+            sem=str(float(sem)*10**(Multiplier))
+            for m in range(0,len(mean)):
+                if mean[m]=='.':
+                    break
+            for s in range(0,len(sem)):
+                if sem[s]=='.':
+                    break
+            if Multiplier>0:
+                Multiplier=0
+            mean=mean[:m-Multiplier+floater]
+            sem=sem[:s-Multiplier+floater]
+            return  f"{mean}+/-{sem}"
+        #f"{float(mean)*10**(Multiplier)}+/-{float(sem)*10**(Multiplier)}"
+        
+        else: return f"{mean}+/-{sem} E{Multiplier}"
+    except: return f"{mean}+/-{sem}"
+###############################################################################
+###############################################################################
+
+def Plot_PM_timeseries(data, bin_edges, PM_values=[0.5,2.5,10],Fraction=False,
+                       datatype="number", ax_in=False, colors=False, cummulative=False):
+    """
+    Parameters
+    ----------
+    data : numpy array
+        An array of data as returned by the Load_xxx functions with columns
+        of datetime, total conc, and size bin data. the data can be either mass, 
+    bin_edges : numpy.array
+        Array containing the limits of all sizebins. 
+    PM_values : list, optional
+        A list of Dp values for which PM should be plotted.
+        The default is [0.5,2.5,10].
+    Fraction : boolean
+        Decides whether the PM should be plotted as values, or as fraction of the biggest PM value.
+        By default the fraction is off.
+    datatype : string, optional
+        Keyword to specify the datatype. The available options are "number",
+        "surface" and "mass". Default is "number"
+    ax_in : matplotlib.axes._subplots.AxesSubplot, Optional
+        Handles for the axis of the plot.
+        Usefull for plotting multiple correlations in the same figure.
+    colors : list, optional
+        List of colors for the plots. A default list is provided below.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Handle for the returned figure for saving.
+    ax : matplotlib.axes._subplots.AxesSubplot
+        Handles for the axis of the plot.
+
+    """
+    #Set up standardized values for later use
+    if colors==False:
+        colors = ["brown","chocolate","darkorange","gold","olive","darkgreen","teal","deepskyblue","darkblue"]
+    
+    y_label={"Number"   :   "N$_{Total}$, cm$^{-3}$",
+             "Surface"  :   "S$_{Total}$, nm$^{2}$ cm$^{-3}$",
+             "Mass"     :   "m$_{Total}$, $\mu$g/m$^{3}$"}
+    Legend_label={'Number': 'PN',
+                  'Surface':'PS',
+                  'Mass':   'PM'}
+    
+    #Corrects for the first letter not being capital in the datatype
+    if datatype[0]=="n":
+        datatype="N"+datatype[1:]
+    elif datatype[0]=="s":
+        datatype="S"+datatype[1:]
+    elif datatype[0]=="m":
+        datatype="M"+datatype[1:]
+ 
+    data=data.copy()
+    
+    #Generate a dictionary of the lists of PM values
+    PM={}
+    for i in range(0,len(PM_values)):
+        pm=str(PM_values[i])
+        PM[pm]=UL.PM_calc(data, bin_edges, PM_values[i])[0][:,1].astype('float')
+                   
+    #If no ax is provided, figure and ax is generated here
+    if ax_in==False:
+        figure, ax = plt.subplots()
+        plt.xticks(fontsize=25)  
+        plt.yticks(fontsize=25)         
+    else:
+        ax = ax_in
+        
+    """  
+    Determines the type of plot. The default is a plot with total concentration
+    and the total concentration each pn/pm values reases.
+    If the Fraction has been turned on, the fractional values will be calculated instead
+    """
+    if Fraction==True:
+        ax.plot(data[:,0],data[:,1],color='k',label='Total',lw=3)
+        ax2 = ax.twinx()
+        PM_fr=PM.copy()
+        for i in range(0,len(PM_values)):
+            pm=str(PM_values[i])
+            
+
+
+            PM_fr[pm]=PM[pm]/PM[str(PM_values[-1])]
+            if i == 0:
+                sem_PM = np.nanstd(PM[pm], axis=0)
+                # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
+                Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                ax2.fill_between(data[:,0], PM_fr[pm],alpha=0.75,color=colors[i],label=Label)
+                
+            else:
+                if cummulative==True:
+                    sem_PM = np.nanstd(PM[pm], axis=0)
+                    # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
+                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                else:
+                    sem_PM = np.nanstd(PM[pm]-PM[str(PM_values[i-1])], axis=0)
+                    # sem_PM = sem(PM[pm]-PM[str(PM_values[i-1])], axis=0,nan_policy="omit")
+                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]-PM[str(PM_values[i-1])]),sem_PM)}"
+                ax2.fill_between(data[:,0], PM_fr[str(PM_values[i-1])], PM_fr[pm],alpha=0.75,color=colors[i],label=Label)
+        
+        ax2.yaxis.set_major_formatter(ticker.PercentFormatter(1.0))
+        ax2.set_ylim(0,1)
+        ax2.set_ylabel(f"{datatype} fraction")
+        ax2.legend(loc='best',title="Average values",fontsize=25,title_fontsize=25)
+
+    else:
+        for i in range(0,len(PM_values)):
+            pm=str(PM_values[i])
+            # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
+            # Label=f"{pm} $\mu$m: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+            if i == 0:
+                sem_PM = np.nanstd(PM[pm], axis=0)
+                # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
+                Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                ax.fill_between(data[:,0], PM[pm],alpha=1,color=colors[i],label=Label)
+            else:
+                if cummulative==True:
+                    sem_PM = np.nanstd(PM[pm], axis=0)
+                    # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
+                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                else:
+                    sem_PM = np.nanstd(PM[pm]-PM[str(PM_values[i-1])], axis=0)
+                    # sem_PM = sem(PM[pm]-PM[str(PM_values[i-1])], axis=0,nan_policy="omit")
+                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]-PM[str(PM_values[i-1])]),sem_PM)}"
+                ax.fill_between(data[:,0], PM[str(PM_values[i-1])], PM[pm],color=colors[i],label=Label)
+        ax.legend(loc='best',title="Average values",fontsize=25,title_fontsize=25)
+
+    #Set the axis settings    
+    
+    ax.set_ylim(0)
+    ax.set_ylabel(y_label[datatype])
+    
+            
+    #Checks wether the data spans more than two days to use suitable x-label and ticks
+    if data[-1,0]-data[0,0]>datetime.timedelta(2,0):
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m %H:%M"))# - %H:%M
+        ax.set_xlabel("Time, DD/MM - HH:MM")
+        ax.xaxis.labelpad = 20
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=-45, ha="left")
+        plt.subplots_adjust(hspace=0.05,bottom = 0.25)
+    # Otherwise just make the x-label and format the axis ticks
+    else:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax.set_xlabel("Time, HH:MM")
+    
+
+    
     return ax.figure,ax
 
 ###############################################################################
@@ -584,12 +1000,14 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
         Flag to set time as elapsed time rather than local time. Set to 1 to
         switch to elapsed time. The default is 0.
     log : boolean, optional
+        Flag to set whether to use log-scale on the reported total concentration. 
+        Default is off
+    log_3d : boolean, optional
         Flag to set whether to use log-scale on the 3D mesh colorbar scale. 
         Default is on
     datatype : string, optional
         Keyword to specify the datatype. The available options are "number",
-        "normed" and "mass". Here "normed" refers to dN/dlogDp. Default is 
-        "number"
+        "surface" and "mass". Default is "number"
     normal:
         Determines whether the data has been normalized. If it hasn't ' a normalization is done.
         
@@ -612,6 +1030,8 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
         dlogDp = np.log10(bin_edges[1:])-np.log10(bin_edges[:-1])
         data=data/dlogDp
     # Generate canvas and axis
+    
+    
     fig, axs = plt.subplots(nrows=2,ncols=1, sharex=True)
     ax1,ax2 = axs
     
@@ -620,9 +1040,9 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
     if elapsed:
         fake_start = datetime.datetime(2023,1,1,0,0,0)
         delta_time = time-time[0]
-        time = delta_time + fake_start
+        time = datetime.timedelta(0,delta_time) + fake_start
         
-        total_time = time[-1]-time[0]
+        total_time = datetime.timedelta(0,time[-1]-time[0])
         days = total_time.days
     
     # Plot the total number concentration
@@ -630,8 +1050,8 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
     
     # Change y-scale, show grid, set y-label, and set y limits 
     ax1.grid(axis="both",which="both")
-    tot_min = total.min()
-    tot_max = total.max()
+    tot_min = np.nanmin(total)
+    tot_max = np.nanmax(total)
     if (y_tot[0] != 0) or (y_tot[1] != 0):
         if (y_tot[0] == 0) & (y_tot[1] != 0):
             ax1.set_ylim(tot_min*0.98,y_tot[1])
@@ -672,18 +1092,6 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
     
     
     # Fill the generated mesh with particle concentration data
-    
-    # Set datapoints smaller than 1 equal to 1 in order to avoid issues when 
-    # plotting log transformed values
-    if np.all(data):
-        print("No zeros, continuing")
-    else:
-        print("""There is a 0 value in the dataset, meaning that log plotting is not possible.\nEither specify a lower limit or turn off log y-scale""")
-        return [], []
-    
-    # Make the colormesh plot
-    # c = ax2.pcolormesh(x, y, data, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
-    
     if log_3d:
         # Set datapoints smaller than 1 equal to 1 in order to avoid issues when 
         # plotting log transformed values
@@ -696,8 +1104,6 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
         # Make the colormesh plot
         c = ax2.pcolormesh(x, y, data, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
         
-        # Set y-axis to log scale
-        ax2.set_yscale("log")
     else:
         c = ax2.pcolormesh(x, y, data, cmap='jet',vmin=y_3d_min, vmax=y_3d_max,shading='flat')
     
@@ -738,7 +1144,6 @@ def Plot_timeseries(data_in, bin_edges, y_tot=(0,0), y_3d=(1,0), elapsed = 0, lo
     axs = np.append(axs,col)
     
     return fig,axs
-
 
 ###############################################################################
 ###############################################################################
@@ -1114,4 +1519,456 @@ def Plot_totalconc_multiple(data_in,labels,log=0,elapsed=0):
 
 ###############################################################################
 ###############################################################################
+###############################################################################
+#%%
+def Plot_timeseries_APS(data_in, y_tot=(0,0), y_3d=(-1,1), elapsed = 0, log = 1, datatype = "number",normal=False):
+    """
+    Function to plot both the total number number concentration and the difference
+    between the optical and aerodynamically assigned size for .
+
+    Parameters
+    ----------
+   data_in : numpy.array
+       An array of data as returned by the Load_xxx functions with columns
+       of datetime, total conc, and size bin data
+    bin_edges : numpy.array
+        Array containing the limits of all sizebins. The array should have one 
+        more value than the length of the "data_in" parameter
+    y_tot : tuple, optional
+        Lower and upper limit on the y-axis of the total concentration plot
+        given as (lower,upper). 
+        The default is (0,0) in which case it will select a value automatically.
+    y_3d : tuple, optional
+        Lower and upper limit on the colorbar of the 3d timeseris plot
+        given as (lower,upper). 
+        The default is (1,0) in which case it will select a max value automatically, while
+        ensuring a lower limit of 1.
+    elapsed : boolean, optional
+        Flag to set time as elapsed time rather than local time. Set to 1 to
+        switch to elapsed time. The default is 0.
+    log : boolean, optional
+        Flag to set whether to use log-scale on the reported total concentration. 
+        Default is off
+    log_3d : boolean, optional
+        Flag to set whether to use log-scale on the 3D mesh colorbar scale. 
+        Default is on
+    datatype : string, optional
+        Keyword to specify the datatype. The available options are "number",
+        "surface" and "mass". Default is "number"
+    normal:
+        Determines whether the data has been normalized. If it hasn't ' a normalization is done.
+        
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Handle for the returned figure for saving.
+    axs : numpy.array
+        Array with two handles, one for each of the two axis objects of the plot.
+
+    """
+    Optic_bins=[487.0,615.3,777.41,982.22,1241.0,1567.94,1981.03,2502.95,
+                3162.36,3995.51,5048.15,6378.12,8058.48,10181.54,12863.94,
+                16253.03,20535.0]
+    Aero_bins=[487.0,528.0,562.5,604.5,649.5,698.0,750.0,806.0,866.5,
+                931.5,1001.0,1075.5,1155.5,1241.5,1334.0,1434.0,1541.0,
+                1655.5,1779.0,1912.0,2055.0,2208.5,2373.0,2550.0,2740.5,
+                2945.0,3164.5,3400.5,3654.5,3927.0,4219.5,4534.5,4873.0,
+                5236.5,5627.0,6046.5,6498.0,6983.0,7504.0,8064.0,8665.5,
+                9312.0,10008.5,10755.0,11555.0,12415.0,13340.0,14340.0,
+                15410.0,16555.0,17790.0,19120.0,20535.0]
+
+    Aero, Optic= UL.APS_cor_summation(data_in)
+
+    Aero_rebin=Optic.copy()
+    Aero_rebin[:,2:]=Aero_rebin[:,2:]*0
+    # fraction=1
+    Aero_count=1
+    for O in range(1,len(Optic_bins)):
+        for A in range(Aero_count,len(Aero_bins)):
+            if Aero_bins[A]<=Optic_bins[O]:
+                Aero_rebin[:,O+1]+=Aero[:,A+1]
+
+            elif Aero_bins[A]>Optic_bins[O]:
+                fraction=(Optic_bins[O]-Aero_bins[A-1])/( Aero_bins[A]-Aero_bins[A-1])
+                Aero_rebin[:,O+1]+=Aero[:,A+1]*fraction
+                Aero_rebin[:,O+2]+=Aero[:,A+1]*(1-fraction)
+                Aero_count=A+1
+                break
+    
+    time = data_in[:,0]
+    total = data_in[:,1].astype('float64')
+    data_3d = Optic[:,2:].astype('float64')-Aero_rebin[:,2:].astype('float64')
+    
+    for i in range(0,len(data_3d[0,:])):
+        data_3d[:,i]=data_3d[:,i]/total[:]
+    
+    if normal==False:
+        dlogDp = np.log10(Optic_bins[1:])-np.log10(Optic_bins[:-1])
+        data_3d=data_3d/dlogDp
+        
+
+    # Generate canvas and axis
+    fig, axs = plt.subplots(nrows=2,ncols=1, sharex=True)
+    ax1,ax2 = axs
+    
+    # If elapsed time is active, adjust the datetime values to start at the new
+    # year, so that the first displayed time and date is "1 00:00"
+    if elapsed:
+        fake_start = datetime.datetime(2023,1,1,0,0,0)
+        delta_time = time-time[0]
+        time = delta_time + fake_start
+        
+        total_time = time[-1]-time[0]
+        days = total_time.days
+    
+    # Plot the total number concentration
+    ax1.plot(time,total,lw=2,color="r")
+    
+    # Change y-scale, show grid, set y-label, and set y limits 
+    ax1.grid(axis="both",which="both")
+    tot_min = total.min()
+    tot_max = total.max()
+    if (y_tot[0] != 0) or (y_tot[1] != 0):
+        if (y_tot[0] == 0) & (y_tot[1] != 0):
+            ax1.set_ylim(tot_min*0.98,y_tot[1])
+        elif (y_tot[0] != 0) & (y_tot[1] == 0):
+            ax1.set_ylim(y_tot[0],tot_max*1.02)
+        else:
+            ax1.set_ylim(y_tot[0],y_tot[1])
+            
+    if log==1:
+        ax1.set_yscale("log")
+
+    ax1.set_xlabel("")
+
+    # Generate an extra time bin, which is needed for the meshgrid
+    dt = time[1]-time[0]
+    time = time - dt
+    time = np.append(time,time[-1]+dt)
+    
+    # generate 2d meshgrid for the x, y, and z data of the 3D color plot
+    y, x = np.meshgrid(Optic_bins, time)
+    
+    # Set the upper and/or lower limit of the color scale based on input
+    if (y_3d[0] == 0) & (y_3d[1] != 0):
+        y_3d_min = np.nanmin(data_3d)
+        y_3d_max = y_3d[1]
+        
+    elif (y_3d[0] != 0) & (y_3d[1] == 0):
+        y_3d_min = y_3d[0]
+        y_3d_max = np.nanmax(data_3d)
+        data_3d[data_3d<y_3d[0]]= y_3d[0]   
+    elif (y_3d[0] != 0) or (y_3d[1] != 0):
+        y_3d_min = y_3d[0]
+        y_3d_max = y_3d[1]
+        data_3d[data_3d<y_3d[0]]= y_3d[0]
+    else:
+        y_3d_min = np.nanmin(data_3d)
+        y_3d_max = np.nanmax(data_3d)
+    
+    
+    # Fill the generated mesh with particle concentration data
+
+    # Make the colormesh plot
+    c = ax2.pcolormesh(x, y, data_3d, cmap='jet',vmin=y_3d_min, vmax=y_3d_max,shading='flat')
+    
+    # Adjust axis labels, formats and spacing between plots
+    if (elapsed!=0) and (days>0):
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter("%d - %H:%M"))
+        ax2.set_xlabel("Time, DD - HH:MM")
+        ax2.xaxis.labelpad = 20
+        ax2.set_xticklabels(ax2.get_xticklabels(), rotation=-45, ha="left")
+        plt.subplots_adjust(hspace=0.05,bottom = 0.25)
+    else:
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax2.set_xlabel("Time, HH:MM")
+        plt.subplots_adjust(hspace=0.05)
+        
+    # Make the y-scal logarithmic and set a label
+    ax2.set_yscale("log")
+    ax2.set_ylabel("Dp, nm")
+    
+    # Insert coloarbar and label it
+    col = fig.colorbar(c, ax=axs)
+
+    if datatype == "number":
+        ax1.set_ylabel("N$_{Total}$, cm$^{-3}$")
+        col.set_label('dn(O-A)/dlogDp, % cm$^{-3}$')
+    elif datatype == 'surface':
+        ax1.set_ylabel("S$_{Total}$, nm$^{2}$ cm$^{-3}$")
+        col.set_label('dS(O-A)/dlogDp, % nm$^{2}$ cm$^{-3}$')
+    elif datatype == "mass":
+        ax1.set_ylabel("m$_{Total}$, $\mu$g/m$^{3}$")
+        col.set_label('dm(O-A)/dlogDp, % $\mu$g/m$^{3}$')
+
+    # Set ticks on the plot to be longer
+    ax1.tick_params(axis="y",which="both",direction='out', length=6, width=2)
+    ax2.tick_params(axis="y",which="both",direction='out', length=6, width=2)
+
+    # Add the colorbar to the axis handles, enabling adjustments after the function is run
+    axs = np.append(axs,col)
+    
+    return fig,axs
+#%%
+def Plot_timeseries_APS_full(data_in,bins=[[],[]], y_tot=(0,0), y_3d=(0,0), y_3diff=(-1,1), log_3d=False, elapsed = 0, log = 1, datatype = "number",normal=False):
+    """
+    Function to plot both the total number number concentration and the difference
+    between the optical and aerodynamically assigned size for the correlated APS.
+    Ideally this would allow for determining the presence of fibres as a discrapency
+    between optically and aerodynamically determined particle size.
+    
+    Parameters
+    ----------
+    data_in : numpy.array
+       An array of data as returned by the Load_xxx functions with columns
+       of datetime, total conc, and size bin data
+    y_tot : tuple, optional
+        Lower and upper limit on the y-axis of the total concentration plot
+        given as (lower,upper). 
+        The default is (0,0) in which case it will select a value automatically.
+    y_3d : tuple, optional
+        Lower and upper limit on the colorbar of the 3d timeseris plot
+        given as (lower,upper). 
+        The default is (1,0) in which case it will select a max value automatically, while
+        ensuring a lower limit of 1.
+    y_3diff: tuple, optional
+        Lower and upper limit on the colorbar of the realtive difference between
+        the optically assigned particel and the re-sized aerodynamically assigned
+        particle size for a 3d timeseris plot.
+        The default is (-1,1) in which case it will span -100% to 100% d
+        
+    elapsed : boolean, optional
+        Flag to set time as elapsed time rather than local time. Set to 1 to
+        switch to elapsed time. The default is 0.
+    log : boolean, optional
+        Flag to set whether to use log-scale on the reported total concentration. 
+        Default is off
+    log_3d : boolean, optional
+        Flag to set whether to use log-scale on the 3D mesh colorbar scale. 
+        Default is on
+    datatype : string, optional
+        Keyword to specify the datatype. The available options are "number",
+        "surface" and "mass". Default is "number"
+    normal:
+        Determines whether the data has been normalized. If it hasn't ' a normalization is done.
+        
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Handle for the returned figure for saving.
+    axs : numpy.array
+        Array with two handles, one for each of the two axis objects of the plot.
+
+    """
+    params = {'legend.fontsize': 20,
+             'axes.labelsize': 25,
+             'axes.titlesize': 25,
+             'xtick.labelsize': 20,
+             'ytick.labelsize': 20,
+             'figure.figsize' : (22, 14)}
+    plt.rcParams.update(params)
+    if len(bins)==0:#[[],[]]:
+        Aero_bins=[523.0,562.5,604.5,649.5,698.0,750.0,806.0,866.5,
+                    931.5,1001.0,1075.5,1155.5,1241.5,1334.0,1434.0,1541.0,
+                    1655.5,1779.0,1912.0,2055.0,2208.5,2373.0,2550.0,2740.5,
+                    2945.0,3164.5,3400.5,3654.5,3927.0,4219.5,4534.5,4873.0,
+                    5236.5,5627.0,6046.5,6498.0,6983.0,7504.0,8064.0,8665.5,
+                    9312.0,10008.5,10755.0,11555.0,12415.0,13340.0,14340.0,
+                    15410.0,16555.0,17790.0,19120.0,20535.0]
+        Optic_bins=[370,475.58,611.28,785.7,1009.89,1298.06,1668.44,2144.52,
+                    2756.44,3542.96,4553.91,5853.33,7523.53,9670.3,12429.63,
+                    15976.31,20535]
+    else: 
+        Aero_bins=bins[0]
+        Optic_bins=bins[1]
+
+    Aero, Optic= UL.APS_cor_summation(data_in)
+
+    Aero_rebin=Optic.copy()
+    Aero_rebin[:,2:]=Aero_rebin[:,2:]*0
+    # fraction=1
+    Aero_count=1
+    for O in range(1,len(Optic_bins)):
+        for A in range(Aero_count,len(Aero_bins)):
+            if Aero_bins[A]<=Optic_bins[O]:
+                Aero_rebin[:,O+1]+=Aero[:,A+1]
+
+            elif Aero_bins[A]>Optic_bins[O]:
+                fraction=(Optic_bins[O]-Aero_bins[A-1])/( Aero_bins[A]-Aero_bins[A-1])
+                Aero_rebin[:,O+1]+=Aero[:,A+1]*fraction
+                Aero_rebin[:,O+2]+=Aero[:,A+1]*(1-fraction)
+                Aero_count=A+1
+                break
+    
+    time = data_in[:,0]
+    total = data_in[:,1].astype('float64')
+    data_3d = Optic[:,2:].astype('float64')-Aero_rebin[:,2:].astype('float64')
+    
+    for i in range(0,len(data_3d[0,:])):
+        data_3d[:,i]=data_3d[:,i]/total[:]
+    
+    if normal==False:
+        dlogDp=np.log10(Aero_bins[1:])-np.log10(Aero_bins[:-1])
+        Aero=Aero[:,2:].astype('float64')/dlogDp
+        dlogDp = np.log10(Optic_bins[1:])-np.log10(Optic_bins[:-1])
+        Optic=Optic[:,2:].astype('float64')/dlogDp
+        #data_3d=data_3d.copy()/dlogDp
+
+    # Generate canvas and axis
+    fig, axs = plt.subplots(nrows=4,ncols=1, sharex=True)
+    axT,axA,axO,axDiff = axs
+    
+    # If elapsed time is active, adjust the datetime values to start at the new
+    # year, so that the first displayed time and date is "1 00:00"
+    if elapsed:
+        fake_start = datetime.datetime(2023,1,1,0,0,0)
+        delta_time = time-time[0]
+        time = delta_time + fake_start
+        
+        total_time = time[-1]-time[0]
+        days = total_time.days
+    
+    # Plot the total number concentration
+    axT.plot(time,total,lw=2,color="r")
+    
+    # Change y-scale, show grid, set y-label, and set y limits 
+    axT.grid(axis="both",which="both")
+    tot_min = total.min()
+    tot_max = total.max()
+    if (y_tot[0] != 0) or (y_tot[1] != 0):
+        if (y_tot[0] == 0) & (y_tot[1] != 0):
+            axT.set_ylim(tot_min*0.98,y_tot[1])
+        elif (y_tot[0] != 0) & (y_tot[1] == 0):
+            axT.set_ylim(y_tot[0],tot_max*1.02)
+        else:
+            axT.set_ylim(y_tot[0],y_tot[1])
+            
+    if log==1:
+        axT.set_yscale("log")
+
+    axT.set_xlabel("")
+
+    # Generate an extra time bin, which is needed for the meshgrid
+    dt = time[1]-time[0]
+    time = time - dt
+    time = np.append(time,time[-1]+dt)
+    
+
+    # Set the upper and/or lower limit of the color scale based on input
+    if (y_3diff[0] == 0) & (y_3diff[1] != 0):
+        y_3d_min = np.nanmin(data_3d)
+        y_3d_max = y_3diff[1]
+        
+    elif (y_3diff[0] != 0) & (y_3diff[1] == 0):
+        y_3d_min = y_3diff[0]
+        y_3d_max = np.nanmax(data_3d)
+          
+    elif (y_3diff[0] != 0) or (y_3diff[1] != 0):
+        y_3d_min = y_3diff[0]
+        y_3d_max = y_3diff[1]
+        data_3d[data_3d<y_3diff[0]]= y_3diff[0]
+    else:
+        y_3d_min = np.nanmin(data_3d)
+        y_3d_max = np.nanmax(data_3d)
+        
+    y, x = np.meshgrid(Optic_bins, time)
+    Diff = axDiff.pcolormesh(x, y, data_3d, cmap='PiYG',vmin=y_3d_min, vmax=y_3d_max,shading='flat')
+    
+    # Set the upper and/or lower limit of the color scale based on input
+    if (y_3d[0] == 0) & (y_3d[1] != 0):
+        y_3d_min = np.nanmin(Aero)
+        if y_3d_min<0:
+            y_3d_min=0
+        y_3d_max = y_3d[1]
+        
+    elif (y_3d[0] != 0) & (y_3d[1] == 0):
+        y_3d_min = y_3d[0]
+        y_3d_max = np.nanmax(Aero)
+        Aero[Aero<y_3d[0]]= y_3d[0]
+        Optic[Optic<y_3d[0]]= y_3d[0] 
+    elif (y_3d[0] != 0) or (y_3d[1] != 0):
+        y_3d_min = y_3d[0]
+        y_3d_max = y_3d[1]
+        Aero[Aero<y_3d[0]]= y_3d[0]
+        Optic[Optic<y_3d[0]]= y_3d[0] 
+    else:
+        y_3d_min = np.nanmin(Aero)
+        if y_3d_min<0:
+            y_3d_min=0
+        y_3d_max = np.nanmax(Aero)
+
+    # generate 2d meshgrid for the x, y, and z data of the 3D color plot
+    y, x = np.meshgrid(Aero_bins, time)
+    # Fill the generated mesh with particle concentration data
+    if log_3d ==True:
+        # Set datapoints smaller than 1 equal to 1 in order to avoid issues when 
+        # plotting log transformed values
+        if (np.all(Aero)) & (np.all(Optic)):
+            print("No zeros, continuing")
+        else:
+            print("""There is a 0 value in the dataset, meaning that log plotting is not possible.\nEither specify a lower limit or turn off log y-scale""")
+            return [], []
+        
+        # Make the colormesh plot
+        Ae = axA.pcolormesh(x, y, Aero, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
+        y, x = np.meshgrid(Optic_bins, time)
+        
+        Op = axO.pcolormesh(x, y, Optic, cmap='jet',norm=LogNorm(vmin=y_3d_min, vmax=y_3d_max),shading='flat')
+
+    else:
+        
+        
+        # Make the colormesh plot
+        Ae = axA.pcolormesh(x, y, Aero, cmap='jet',vmin=y_3d_min, vmax=y_3d_max,shading='flat')
+        # generate 2d meshgrid for the x, y, and z data of the 3D color plot
+        y, x = np.meshgrid(Optic_bins, time)
+        
+        Op = axO.pcolormesh(x, y, Optic, cmap='jet',vmin=y_3d_min, vmax=y_3d_max,shading='flat')
+
+    # Adjust axis labels, formats and spacing between plots
+    if (elapsed!=0) and (days>0):
+        axDiff.xaxis.set_major_formatter(mdates.DateFormatter("%d - %H:%M"))
+        axDiff.set_xlabel("Time, DD - HH:MM")
+        axDiff.xaxis.labelpad = 20
+        axDiff.set_xticklabels(axDiff.get_xticklabels(), rotation=-45, ha="left")
+        plt.subplots_adjust(hspace=0.05,bottom = 0.25)
+    else:
+        axDiff.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        axDiff.set_xlabel("Time, HH:MM")
+        plt.subplots_adjust(hspace=0.05)
+        
+    # Make the y-scal logarithmic and set a label
+    axA.set_yscale("log")
+    axA.set_ylabel("Aero, nm")
+    axO.set_yscale("log")
+    axO.set_ylabel("Optic, nm")
+    axDiff.set_yscale("log")
+    axDiff.set_ylabel("Diff, nm")
+    
+    
+    # Insert colorbar and label it
+
+    col_Diff = fig.colorbar(Diff, ax=axs)
+    col_conc = fig.colorbar(Ae, ax=axs)
+    col_Diff.formatter(ticker.PercentFormatter(1.0))
+    
+    if datatype == "number":
+        axT.set_ylabel("N$_{Total}$, cm$^{-3}$")
+        col_conc.set_label('dn/dlogDp, cm$^{-3}$')
+        col_Diff.set_label('(Optic - Aero)/total, %')
+    elif datatype == 'surface':
+        axT.set_ylabel("S$_{Total}$, nm$^{2}$ cm$^{-3}$")
+        col_Diff.set_label('dS(O-A)/dlogDp, % nm$^{2}$ cm$^{-3}$')
+    elif datatype == "mass":
+        axT.set_ylabel("m$_{Total}$, $\mu$g/m$^{3}$")
+        col_Diff.set_label('dm(O-A)/dlogDp, % $\mu$g/m$^{3}$')
+
+    # Set ticks on the plot to be longer
+    axT.tick_params(axis="y",which="both",direction='out', length=6, width=2)
+    axDiff.tick_params(axis="y",which="both",direction='out', length=6, width=2)
+    
+    # Add the col_Difforbar to the axis handles, enabling adjustments after the function is run
+    axs = np.append(axs,col_Diff)
+    
+    return fig,axs
 ###############################################################################
