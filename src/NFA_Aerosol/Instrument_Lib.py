@@ -2019,16 +2019,23 @@ def Load_filter_file(file: str,sheet_name : str = "Summary Filters"):
                         data.loc[i,"Start time"] = data.loc[i,"Stop time"] - datetime.timedelta(0,int(data.loc[i,"Sampled volume"]/data.loc[i,"Flow"]*60))
                     elif time_check==2:
                         data.loc[i,"Stop time"] = data.loc[i,"Start time"] + datetime.timedelta(0,int(data.loc[i,"Sampled volume"]/data.loc[i,"Flow"]*60))
-            
+        
+    data['Detection Limit'][data['Detection Limit'].isnull()]=0
     # Check whether the data is below the detection limit
-    data['Mean concentration'][data['Mean concentration']<0] ='BDL'
-    data['Mean concentration'][data['Mean concentration']<data['Detection Limit']] ='BDL'
+    data['Mean concentration']=data['Mean concentration']*1000
+    data['Mean concentration'][data['Mean concentration']<data['Detection Limit']*1000] ='BDL'
 
     # Final formalizing
     data.reset_index(inplace=True,drop=True)
     data=data.rename(columns=rows)
-    data.drop(columns=data.columns[19:],inplace=True) 
-    [data.drop(columns=data.columns[i],inplace=True) for i in [18,16,14,13,9,7,6,5,4,3]]
+    data=data[['Filter diameter', 'Filter type', 'Filter number (reference)',
+           'Measurement location (working area, personal or outdoors)',
+           'Start time', 'Stop time', 'Sampled time [h]', 'Sampled volume [L]',
+           'Mean concentration [µg/m3]']]
+
+    # data.drop(columns=data.columns[19:],inplace=True) 
+    
+    # [data.drop(columns=data.columns[i],inplace=True) for i in [18,16,14,13,9,7,6,5,4,3]]
     
     # Split into two DataFrames
     data_blank = data[data["Filter type"] == "BLANK"]

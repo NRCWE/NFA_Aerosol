@@ -581,7 +581,7 @@ def Plot_correlation_df(df, fig_text="", *Plotsettings):
         return fig, gs
 
 ###############################################################################
-def rounder(mean,sem):
+def _rounder(mean,sem):
     try:
         # sem=Sem
         # mean=Mean
@@ -718,18 +718,18 @@ def Plot_PM_timeseries(data, bin_edges, PM_values=[0.5,2.5,10],Fraction=False,
             if i == 0:
                 sem_PM = np.nanstd(PM[pm], axis=0)
                 # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
-                Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                Label=f"{Legend_label[datatype]}{pm}: {_rounder(np.nanmean(PM[pm]),sem_PM)}"
                 ax2.fill_between(data[:,0], PM_fr[pm],alpha=0.75,color=colors[i],label=Label)
                 
             else:
                 if cummulative==True:
                     sem_PM = np.nanstd(PM[pm], axis=0)
                     # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
-                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                    Label=f"{Legend_label[datatype]}{pm}: {_rounder(np.nanmean(PM[pm]),sem_PM)}"
                 else:
                     sem_PM = np.nanstd(PM[pm]-PM[str(PM_values[i-1])], axis=0)
                     # sem_PM = sem(PM[pm]-PM[str(PM_values[i-1])], axis=0,nan_policy="omit")
-                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]-PM[str(PM_values[i-1])]),sem_PM)}"
+                    Label=f"{Legend_label[datatype]}{pm}: {_rounder(np.nanmean(PM[pm]-PM[str(PM_values[i-1])]),sem_PM)}"
                 ax2.fill_between(data[:,0], PM_fr[str(PM_values[i-1])], PM_fr[pm],alpha=0.75,color=colors[i],label=Label)
         
         ax2.yaxis.set_major_formatter(ticker.PercentFormatter(1.0))
@@ -745,17 +745,17 @@ def Plot_PM_timeseries(data, bin_edges, PM_values=[0.5,2.5,10],Fraction=False,
             if i == 0:
                 sem_PM = np.nanstd(PM[pm], axis=0)
                 # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
-                Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                Label=f"{Legend_label[datatype]}{pm}: {_rounder(np.nanmean(PM[pm]),sem_PM)}"
                 ax.fill_between(data[:,0], PM[pm],alpha=1,color=colors[i],label=Label)
             else:
                 if cummulative==True:
                     sem_PM = np.nanstd(PM[pm], axis=0)
                     # sem_PM = sem(PM[pm], axis=0,nan_policy="omit")
-                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]),sem_PM)}"
+                    Label=f"{Legend_label[datatype]}{pm}: {_rounder(np.nanmean(PM[pm]),sem_PM)}"
                 else:
                     sem_PM = np.nanstd(PM[pm]-PM[str(PM_values[i-1])], axis=0)
                     # sem_PM = sem(PM[pm]-PM[str(PM_values[i-1])], axis=0,nan_policy="omit")
-                    Label=f"{Legend_label[datatype]}{pm}: {rounder(np.nanmean(PM[pm]-PM[str(PM_values[i-1])]),sem_PM)}"
+                    Label=f"{Legend_label[datatype]}{pm}: {_rounder(np.nanmean(PM[pm]-PM[str(PM_values[i-1])]),sem_PM)}"
                 ax.fill_between(data[:,0], PM[str(PM_values[i-1])], PM[pm],color=colors[i],label=Label)
         ax.legend(loc='best',title="Average values",fontsize=25,title_fontsize=25)
 
